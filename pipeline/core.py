@@ -256,7 +256,29 @@ def walkup_cohort(norm: pd.DataFrame, slots: pd.DataFrame, cutoff: str) -> Cohor
     return CohortBuild(timing=timing, slot_ledger=ledger, row_ledger=row_ledger)
 
 
-def coverage_hourly(slots: pd.DataFrame, timing: pd.DataFrame) -> pd.DataFrame:
+ADDITIONAL_PLAYER_METHODS = {"second", "third", "fourth"}
+
+
+def court_groups(norm: pd.DataFrame, slots: pd.DataFrame, online_threshold: float = 0.5) -> dict:
+    """Classify courts by how their slots are booked.
+
+    A slot counts as "online" if any first-player row (not 2nd/3rd/4th player)
+    was booked online. Courts where at least `online_threshold` of such slots
+    are online are "online courts"; the rest are "walk-up courts".
+    """
+    rows = norm[norm["slot_id"].isin(slots["slot_id"]) & ~norm["method_n"].isin(ADDITIONAL_PLAYER_METHODS)]
+    per_slot = rows.groupby("slot_id")["method_n"].agg(lambda s: bool((s == "online").any())).rename("online")
+    per_slot = per_slot.to_frame().join(slots.set_index("slot_id")["court_num"])
+    share = per_slot.groupby("court_num")["online"].mean().sort_index()
+    return {
+        "online_share": {int(c): round(float(v), 3) for c, v in share.items()},
+        "walkup": [int(c) for c, v in share.items() if v < online_threshold],
+        "online": [int(c) for c, v in share.items() if v >= online_threshold],
+        "rule": f"online court = at least {online_threshold:.0%} of slots booked online by the first player",
+    }
+
+
+def coverage_hourly(slots: pd.DataFrame, timing: pd.DataFrame, walkup_courts: list[int] | None = None) -> pd.DataFrame:
     """Recorded slots per date x hour by status. Missing cells are simply absent."""
     counts = slots.pivot_table(index=["date", "hour"], columns="status", values="slot_id", aggfunc="count", fill_value=0)
     for s in SCHEDULE_STATUSES:
@@ -265,7 +287,13 @@ def coverage_hourly(slots: pd.DataFrame, timing: pd.DataFrame) -> pd.DataFrame:
     counts = counts[SCHEDULE_STATUSES + [c for c in counts.columns if c not in SCHEDULE_STATUSES]]
     counts["recorded"] = counts.sum(axis=1)
     q = timing.groupby(["date", "hour"]).size().rename("qualifying")
-    out = counts.join(q, how="left").fillna({"qualifying": 0}).reset_index()
+    out = counts.join(q, how="left").fillna({"qualifying": 0})
+    if walkup_courts is not None:
+        wc = slots[slots["court_num"].isin(walkup_courts)]
+        out = out.join(wc.groupby(["date", "hour"]).size().rename("recorded_walkup_courts"), how="left")
+        tq = timing[timing["court_num"].isin(walkup_courts)].groupby(["date", "hour"]).size().rename("qualifying_walkup_courts")
+        out = out.join(tq, how="left").fillna({"recorded_walkup_courts": 0, "qualifying_walkup_courts": 0})
+    out = out.reset_index()
     out.columns.name = None
     return out.astype({c: int for c in out.columns if c not in ("date",)})
 

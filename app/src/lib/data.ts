@@ -88,6 +88,7 @@ export interface Manifest {
     pooled_p75_minute: number | null
   }[]
   public_files: { count: number; non_slot_files: string[] }
+  court_groups?: { walkup: number[]; online: number[]; online_share: Record<string, number>; rule: string }
 }
 
 export type StatusCounts = Record<Status, number>
@@ -124,7 +125,8 @@ export interface Timing {
   unit: string
   dates: string[]
   slots: { d: number[]; h: number[]; m: number[]; c: number[] }
-  hourly: { d: number[]; h: number[]; recorded: number[]; checkedin: number[]; qualifying: number[] }
+  hourly: { d: number[]; h: number[]; recorded: number[]; checkedin: number[]; qualifying: number[]; recorded_wc?: number[]; qualifying_wc?: number[] }
+  court_groups?: { walkup: number[]; online: number[]; online_share: Record<string, number>; rule: string }
 }
 
 export interface SlotDetail {
@@ -167,4 +169,40 @@ export const loadOverview = () => load<Overview>('overview.json')
 export const loadTiming = () => load<Timing>('timing.json')
 export const loadDay = (date: string) => load<DayPartition>(`slots/${date}.json`)
 export const loadWeather = () => load<WeatherData>('weather.json')
+export const loadInsights = () => load<Insights>('insights.json')
+
+export interface Insights {
+  party_size?: {
+    counts: Record<string, number>
+    counts_walkup_courts: Record<string, number>
+    by_hour: { hour: number; singles: number; doubles: number; three: number; one: number }[]
+    rule: string
+  }
+  two_hour?: {
+    rule: string
+    likely_pairs: number
+    possible_pairs: number
+    likely_with_doubles: number
+    walkup_court_hours: number
+    likely_share_of_walkup_hours: number | null
+    likely_by_start_hour: Record<string, number>
+  }
+  partner_entry?: {
+    bins: number[]
+    rule_minutes: number
+    second: PartnerStats
+    fourth: PartnerStats
+  }
+}
+
+export interface PartnerStats {
+  n: number
+  median: number | null
+  p25: number | null
+  p75: number | null
+  share_15_or_more_before: number | null
+  share_0_to_15_before: number | null
+  share_after_start: number | null
+  histogram: number[]
+}
 export const dataUrl = (path: string) => BASE + path

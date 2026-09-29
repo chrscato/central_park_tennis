@@ -50,6 +50,7 @@ export interface WeatherData {
     tmax_f: (number | null)[]
     tmin_f: (number | null)[]
   }
+  hourly_rain?: { start: string; values: (number | null)[]; trace_index: number[] }
   cells: {
     d: number[]
     h: number[]

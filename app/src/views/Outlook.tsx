@@ -38,7 +38,7 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
     if (!available) return []
     const opts = { firstDate: manifest.snapshot.reservation_date_min, cutoff: manifest.snapshot.historical_outcome_cutoff, minDates: 1 }
     return WINDOWS.map((w) => {
-      const f = { months: SEASON, weekdays: WEEKDAYS, years: [], hours: w.hours }
+      const f = { months: SEASON, weekdays: WEEKDAYS, years: [], hours: w.hours, courts: 'walkup' as const }
       return {
         ...w,
         late: computePlanner(timing, f, { ...opts, weather: combineTests(openingTest(weather, 'late')) }),
@@ -122,22 +122,22 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
               <>
                 <div className="readouts" style={{ marginBottom: 8 }}>
                   <Readout
-                    label="Courts back (median)"
+                    label="Courts usually back by"
                     value={o.firstPlay.p50 == null ? '—' : hourLabel(Math.round(o.firstPlay.p50))}
                     accent
                     sub={`Range ${o.firstPlay.p25 == null ? '—' : hourLabel(Math.floor(o.firstPlay.p25))}–${o.firstPlay.p75 == null ? '—' : hourLabel(Math.ceil(o.firstPlay.p75))}`}
                   />
-                  <Readout label="Mornings rained out" value={pct(o.lateShare, 0)} sub={`${num(o.lateDates)} of ${num(o.knownOpeningDates)} days`} />
-                  <Readout label="Sample" value={num(o.dates.length)} sub={o.dates.length < 10 ? 'Small — rough guide' : 'days'} />
+                  <Readout label="Mornings closed" value={pct(o.lateShare, 0)} sub={`${num(o.lateDates)} of ${num(o.knownOpeningDates)} days`} />
+                  <Readout label="Based on" value={num(o.dates.length)} sub={o.dates.length < 10 ? 'Few days, rough guide' : 'past days'} />
                 </div>
                 <div className="grid-wrap tall">
                   <table className="dg">
                     <thead>
                       <tr>
                         <th>Start</th>
-                        <th style={{ width: '55%' }}>Rained out (0–100%)</th>
-                        <th className="n">%</th>
-                        <th className="n">Court-hours</th>
+                        <th style={{ width: '55%' }}>Share of courts closed by rain</th>
+                        <th className="n">Closed</th>
+                        <th className="n">Courts counted</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -163,13 +163,13 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
           </Group>
         )}
 
-        <Group title="When mornings are rained out, later courts go sooner (weekdays)">
+        <Group title="When mornings are closed, afternoon and evening courts go sooner">
           <div className="grid-wrap">
             <table className="dg">
               <thead>
                 <tr>
                   <th>Courts</th>
-                  <th className="n">Late-opening day</th>
+                  <th className="n">Mornings closed</th>
                   <th className="n">Normal day</th>
                   <th className="n">Earlier by</th>
                   <th className="n">Days</th>
@@ -200,9 +200,9 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
               </tbody>
             </table>
           </div>
-          <div className="hint">Median walkup booking time on a typical day. Late opening = 50%+ of 7–11 AM courts rained out.</div>
+          <div className="hint">Typical time the courts were half taken, weekdays, walk-up courts. “Mornings closed” = half or more of 7–11 AM courts rained out.</div>
         </Group>
-        <div className="foot">Recorded statuses, not official closure notices. Past frequencies, not a forecast.</div>
+        <div className="foot">Based on past records, not official closure notices or a forecast.</div>
       </section>
     </div>
   )

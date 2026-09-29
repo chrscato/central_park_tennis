@@ -59,6 +59,16 @@ NOAA's NCEI Access Data Service is **not** used live: its daily summaries lag re
 
 Small samples (for example 19 dry days after 0.50"+ of rain) are shown with their counts.
 
+## Walk-up vs online courts
+
+Courts are grouped from the data: a slot counts as online if its first player (not a 2nd/3rd/4th player) booked online. Courts where at least half of slots are online are **online courts** (currently 19–24, about 93% online); the rest are **walk-up courts** (1–18 at 0%, 25–26 at 10–12%). Booking times use walk-up bookings only (method `walkup`) and, by default, walk-up courts only. Choosing "All" adds the roughly 1,300 walk-up bookings made on online courts, which are likely leftover slots taken on the day.
+
+## Insights (inferred, not fields in the export)
+
+- **Party size:** checked-in court-hours by the partner records checked in. A 4th player means doubles, a 2nd (without 3rd/4th) means singles, and no partner record means "one".
+- **2-hour bookings:** same court, back-to-back hours, both booked as walk-ups. If the first player's records were created within 60 seconds of each other, it counts as "possible". If the second player's were too, it counts as "likely". There is no booking ID, so these are estimates.
+- **Partner check-in:** for checked-in walk-up bookings on walk-up courts, the minutes between the partner record's creation time and the court time. It is compared with the 15-minute rule. This is when the record was entered, which may not equal the arrival time.
+
 ## Latest bookings
 
 For each date in the filter: the day's **last** qualifying walkup booking and its **final five** booking times. Summaries weight each date once: median (and IQR) of the daily last booking, and the median of each day's 5th-from-last booking (days with 5+ bookings only). These show how late courts were still being booked, not when courts ran out, because the export has no inventory of unbooked courts.

@@ -166,6 +166,15 @@ def build(
             "tmax_f": col(d["tmax_f"], 1),
             "tmin_f": col(d["tmin_f"], 1),
         },
+        # Continuous hourly rain (hour ending :51, local), for day drill-downs.
+        "hourly_rain": {
+            "start": start,
+            "values": col(grid[(grid.index >= pd.Timestamp(start)) & (grid.index < pd.Timestamp(end) + pd.Timedelta(days=1))].reindex(
+                pd.date_range(start, pd.Timestamp(end) + pd.Timedelta(hours=23), freq="h"))["rain_in"]),
+            "trace_index": [
+                i for i, v in enumerate(grid["trace"].reindex(pd.date_range(start, pd.Timestamp(end) + pd.Timedelta(hours=23), freq="h"), fill_value=False)) if v
+            ],
+        },
         "cells": {
             "d": [didx.get(x, -1) for x in feats["date"]],
             "h": feats["hour"].astype(int).tolist(),

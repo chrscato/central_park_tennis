@@ -170,3 +170,44 @@ def test_reason_equal_to_vocabulary_is_exempt():
 def test_dst_nonexistent_time_is_flagged_not_guessed():
     _, norm, _, _ = run([row(1, start="2026-03-08 02:30:00", created="2026-03-08 02:10:00")])
     assert norm["res_tz_flag"].iloc[0] == "dst-ambiguous-or-nonexistent"
+
+
+def test_court_groups_split_online_and_walkup_courts():
+    rows = [
+        row(1, court=20, method="online", created="2025-04-01 09:00:00"),
+        row(1, court=20, method="second"),
+        row(2, court=20, method="online", created="2025-04-01 09:00:00", start="2025-04-02 19:00:00"),
+        row(3, court=5),
+        row(3, court=5, method="second"),
+    ]
+    _, norm, sb, cb = run(rows)
+    g = core.court_groups(norm, sb.slots)
+    assert g["online"] == [20] and g["walkup"] == [5]
+    hourly = core.coverage_hourly(sb.slots, cb.timing, g["walkup"])
+    h18 = hourly[hourly["hour"] == 18].iloc[0]
+    assert int(h18["recorded"]) == 2 and int(h18["recorded_walkup_courts"]) == 1
+
+
+def test_insights_party_size_two_hour_and_partner_timing():
+    from pipeline import insights
+
+    rows = [
+        # 2-hour doubles booking on court 3: 17:00 and 18:00, all records entered together
+        row(1, court=3, start="2025-04-02 17:00:00", created="2025-04-02 07:00:00"),
+        row(1, court=3, start="2025-04-02 17:00:00", created="2025-04-02 16:30:00", method="second"),
+        row(1, court=3, start="2025-04-02 17:00:00", created="2025-04-02 16:31:00", method="third"),
+        row(1, court=3, start="2025-04-02 17:00:00", created="2025-04-02 16:32:00", method="fourth"),
+        row(2, court=3, start="2025-04-02 18:00:00", created="2025-04-02 07:00:20"),
+        row(2, court=3, start="2025-04-02 18:00:00", created="2025-04-02 16:30:30", method="second"),
+        # separate singles on court 4, partner entered 5 min after start
+        row(3, court=4, start="2025-04-02 18:00:00", created="2025-04-02 07:10:00"),
+        row(3, court=4, start="2025-04-02 18:00:00", created="2025-04-02 18:05:00", method="second"),
+    ]
+    _, norm, sb, _ = run(rows)
+    ps = insights.party_sizes(norm, sb.slots, CUTOFF, [3, 4])
+    assert ps["counts"] == {"singles": 2, "doubles": 1}
+    th = insights.two_hour_bookings(norm, sb.slots, CUTOFF)
+    assert th["likely_pairs"] == 1 and th["likely_with_doubles"] == 1
+    pe = insights.partner_entry(norm, sb.slots, CUTOFF, [3, 4])
+    assert pe["second"]["n"] == 3
+    assert pe["second"]["share_after_start"] == round(1 / 3, 4)

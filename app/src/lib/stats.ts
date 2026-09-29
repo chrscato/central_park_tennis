@@ -52,9 +52,10 @@ export interface PlannerFilter {
   weekdays: number[]
   years: number[] // empty = all years
   hours: number[] // slot start hours (24h)
+  courts?: 'walkup' | 'all' // 'walkup' = courts mostly booked in person (default in the UI); omitted = all
 }
 
-export const DEFAULT_FILTER: PlannerFilter = { months: [4], weekdays: [3], years: [], hours: [17, 18] }
+export const DEFAULT_FILTER: PlannerFilter = { months: [4], weekdays: [3], years: [], hours: [17, 18], courts: 'walkup' }
 
 export interface DaySeries {
   date: string
@@ -116,11 +117,14 @@ export function computePlanner(t: Timing, f: PlannerFilter, opts: PlannerOptions
   const wx = meta.map((m, i) => (calendarOk[i] && opts.weather ? opts.weather(m.date) : 'ok'))
   const dateOk = calendarOk.map((ok, i) => ok && wx[i] === 'ok')
 
+  const walkupOnly = f.courts === 'walkup' && !!t.court_groups && !!t.hourly.recorded_wc
+  const walkupCourts = new Set(t.court_groups?.walkup ?? [])
   const perDate = new Map<number, number[]>()
   const pooledTimes: number[] = []
-  const { d, h, m } = t.slots
+  const { d, h, m, c } = t.slots
   for (let k = 0; k < d.length; k++) {
     if (!dateOk[d[k]] || !hourSet.has(h[k])) continue
+    if (walkupOnly && !walkupCourts.has(c[k])) continue
     pooledTimes.push(m[k])
     let arr = perDate.get(d[k])
     if (!arr) perDate.set(d[k], (arr = []))
@@ -132,12 +136,13 @@ export function computePlanner(t: Timing, f: PlannerFilter, opts: PlannerOptions
   const weatherExcluded = new Set<number>()
   const weatherUnknown = new Set<number>()
   const hr = t.hourly
+  const recorded = walkupOnly ? hr.recorded_wc! : hr.recorded
   for (let k = 0; k < hr.d.length; k++) {
     const di = hr.d[k]
-    if (!calendarOk[di] || !hourSet.has(hr.h[k]) || !hr.recorded[k]) continue
+    if (!calendarOk[di] || !hourSet.has(hr.h[k]) || !recorded[k]) continue
     if (wx[di] === 'no') weatherExcluded.add(di)
     else if (wx[di] === 'unknown') weatherUnknown.add(di)
-    else recordedByDate.set(di, (recordedByDate.get(di) ?? 0) + hr.recorded[k])
+    else recordedByDate.set(di, (recordedByDate.get(di) ?? 0) + recorded[k])
   }
 
   const days: DaySeries[] = [...perDate.entries()]

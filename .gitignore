@@ -19,6 +19,7 @@ node_modules/
 app/dist/
 app/public/data.staging/
 app/public/data.previous/
+app/.public-data.previous/
 
 # OS / editor
 .DS_Store

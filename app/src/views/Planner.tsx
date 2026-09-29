@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CurvesChart, TimeHistogram } from '../components/charts'
 import { Figure, Group, Readout } from '../components/common'
 import type { Manifest, Timing } from '../lib/data'
-import { clock, hourLabel, inList, longDate, MONTHS, num, WEEKDAYS } from '../lib/format'
+import { clock, hourLabel, inList, longDate, MONTHS, MONTHS_LONG, num, ranges, WEEKDAYS, WEEKDAYS_LONG } from '../lib/format'
 import { combineTests, OPENING_FILTER, openingTest, type OpeningFilter } from '../lib/outlook'
 import { alarmMinute, computePlanner, DEFAULT_FILTER, type PlannerFilter } from '../lib/stats'
 import { href, parseIntList, replaceParams } from '../lib/url'
@@ -33,6 +33,7 @@ function readState(params: URLSearchParams, years: number[]) {
     weekdays: pick('dow', 0, 6, DEFAULT_FILTER.weekdays, 'day'),
     years: params.get('y') === 'all' || !params.has('y') ? [] : pick('y', Math.min(...years), Math.max(...years), [], 'season'),
     hours: pick('h', 0, 23, DEFAULT_FILTER.hours, 'start time'),
+    courts: params.get('c') === 'all' ? 'all' : 'walkup',
   }
   const n = (key: string, fallback: number) => {
     const raw = params.get(key)
@@ -64,6 +65,7 @@ function toParams(f: PlannerFilter, bench: boolean, p: Personal, wx: PlannerWeat
   q.set('dow', f.weekdays.join(','))
   q.set('y', f.years.length ? f.years.join(',') : 'all')
   q.set('h', f.hours.join(','))
+  if (f.courts === 'all') q.set('c', 'all')
   if (wx !== 'any') q.set('wx', wx)
   if (open !== 'any') q.set('open', open)
   if (!bench) q.set('bench', '0')
@@ -91,6 +93,21 @@ function Checks({ options, selected, onChange, label, cols }: { options: number[
   )
 }
 
+/** "Wednesdays in April" / "Weekdays in April, May" */
+function describe(f: PlannerFilter): string {
+  const wd = f.weekdays
+  const days =
+    wd.length === 7
+      ? 'Any day'
+      : wd.length === 5 && [1, 2, 3, 4, 5].every((d) => wd.includes(d))
+        ? 'Weekdays'
+        : wd.length === 2 && wd.includes(0) && wd.includes(6)
+          ? 'Weekends'
+          : wd.map((d) => WEEKDAYS_LONG[d] + 's').join(', ')
+  const months = f.months.length === SEASON_MONTHS.length ? 'the season' : f.months.map((m) => MONTHS_LONG[m - 1]).join(', ')
+  return `${days} in ${months}`
+}
+
 export function Planner({ manifest, timing, weather, params }: { manifest: Manifest; timing: Timing; weather: WeatherData; params: URLSearchParams }) {
   const years = useMemo(() => [...new Set(timing.dates.map((d) => Number(d.slice(0, 4))))], [timing])
   const initial = useMemo(() => readState(params, years), []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -106,29 +123,19 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
 
   const minDates = manifest.cohort.min_dates_for_planning_target
   const cutoff = manifest.snapshot.historical_outcome_cutoff
-  const test = useMemo(
-    () => (wxAvailable ? combineTests(plannerWeatherTest(weather, wx), openingTest(weather, open)) : undefined),
-    [weather, wx, open, wxAvailable],
-  )
+  const test = useMemo(() => (wxAvailable ? combineTests(plannerWeatherTest(weather, wx), openingTest(weather, open)) : undefined), [weather, wx, open, wxAvailable])
   const r = useMemo(
     () => computePlanner(timing, filter, { firstDate: manifest.snapshot.reservation_date_min, cutoff, minDates, binMinutes: BIN, weather: test }),
     [timing, filter, manifest, cutoff, minDates, test],
   )
 
+  const walkupCourts = timing.court_groups?.walkup ?? []
+  const onlineCourts = timing.court_groups?.online ?? []
   const incomplete = !filter.months.length || !filter.weekdays.length || !filter.hours.length
   const target = r.planningTarget.suppressed ? null : r.planningTarget.minute
   const alarm = target == null ? null : alarmMinute(target, personal.prep, personal.travel, personal.buffer)
   const limited = r.days.length < minDates
-  const query = [
-    inList(filter.weekdays.map((d) => WEEKDAYS[d])),
-    inList(filter.months.map((m) => MONTHS[m - 1])),
-    inList(filter.hours.map(hourLabel)),
-    filter.years.length ? filter.years.join(', ') : 'All seasons',
-    wx !== 'any' ? PLANNER_WEATHER[wx] : null,
-    open !== 'any' ? OPENING_FILTER[open] : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const courtText = filter.courts === 'all' ? 'all courts' : 'walk-up courts'
 
   const copyLink = async () => {
     try {
@@ -144,51 +151,66 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
   return (
     <div className="split">
       <aside>
-        <Group title="Month">
-          <Checks cols={4} options={SEASON_MONTHS} selected={filter.months} onChange={(months) => setFilter({ ...filter, months })} label={(m) => MONTHS[m - 1]} />
+        <Group title="Court time">
+          <Checks cols={3} options={HOURS} selected={filter.hours} onChange={(hours) => setFilter({ ...filter, hours })} label={hourLabel} />
         </Group>
         <Group title="Day">
           <Checks cols={4} options={DAYS} selected={filter.weekdays} onChange={(weekdays) => setFilter({ ...filter, weekdays })} label={(d) => WEEKDAYS[d]} />
         </Group>
-        <Group title="Court start time">
-          <Checks cols={3} options={HOURS} selected={filter.hours} onChange={(hours) => setFilter({ ...filter, hours })} label={hourLabel} />
+        <Group title="Month">
+          <Checks cols={4} options={SEASON_MONTHS} selected={filter.months} onChange={(months) => setFilter({ ...filter, months })} label={(m) => MONTHS[m - 1]} />
         </Group>
-        <Group title="Season">
-          <div className="checks c3">
+        <Group title="Courts">
+          <div className="checks c2">
             <label>
-              <input type="radio" name="season" checked={!filter.years.length} onChange={() => setFilter({ ...filter, years: [] })} />
+              <input type="radio" name="courts" checked={filter.courts !== 'all'} onChange={() => setFilter({ ...filter, courts: 'walkup' })} />
+              <span>Walk-up</span>
+            </label>
+            <label>
+              <input type="radio" name="courts" checked={filter.courts === 'all'} onChange={() => setFilter({ ...filter, courts: 'all' })} />
               <span>All</span>
             </label>
-            {years.map((y) => (
-              <label key={y}>
-                <input type="radio" name="season" checked={filter.years.length === 1 && filter.years[0] === y} onChange={() => setFilter({ ...filter, years: [y] })} />
-                <span>{y}</span>
+          </div>
+          {onlineCourts.length > 0 && <div className="hint">Courts {ranges(onlineCourts)} are mostly booked online, so they’re left out by default.</div>}
+        </Group>
+        <details>
+          <summary className="small" style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--ink-2)', marginBottom: 8 }}>
+            More filters
+          </summary>
+          <Group title="Season">
+            <div className="checks c3">
+              <label>
+                <input type="radio" name="season" checked={!filter.years.length} onChange={() => setFilter({ ...filter, years: [] })} />
+                <span>All</span>
               </label>
-            ))}
-          </div>
-        </Group>
-        <Group title="Conditions">
-          <div className="field">
-            <label htmlFor="wx">Rain before</label>
-            <select id="wx" disabled={!wxAvailable} value={wx} onChange={(e) => setWx(e.target.value as PlannerWeather)}>
-              {Object.entries(PLANNER_WEATHER).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
+              {years.map((y) => (
+                <label key={y}>
+                  <input type="radio" name="season" checked={filter.years.length === 1 && filter.years[0] === y} onChange={() => setFilter({ ...filter, years: [y] })} />
+                  <span>{y}</span>
+                </label>
               ))}
-            </select>
-            <label htmlFor="open">Mornings</label>
-            <select id="open" disabled={!wxAvailable} value={open} onChange={(e) => setOpen(e.target.value as OpeningFilter)}>
-              {Object.entries(OPENING_FILTER).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {k === 'late' ? 'Rained out (late opening)' : v}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="hint">Late opening: half or more of 7–11 AM courts rained out.</div>
-        </Group>
-        <div className="row">
+            </div>
+          </Group>
+          <Group title="Weather">
+            <div className="field">
+              <label htmlFor="wx">Rain before</label>
+              <select id="wx" disabled={!wxAvailable} value={wx} onChange={(e) => setWx(e.target.value as PlannerWeather)}>
+                {Object.entries(PLANNER_WEATHER).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+              <label htmlFor="open">Mornings</label>
+              <select id="open" disabled={!wxAvailable} value={open} onChange={(e) => setOpen(e.target.value as OpeningFilter)}>
+                <option value="any">Any</option>
+                <option value="late">Closed by rain</option>
+                <option value="normal">Open as usual</option>
+              </select>
+            </div>
+          </Group>
+        </details>
+        <div className="row" style={{ marginTop: 8 }}>
           <button className="btn" type="button" onClick={copyLink}>
             {copied ? 'Copied' : 'Copy link'}
           </button>
@@ -204,42 +226,34 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
             Reset
           </button>
         </div>
-        <label className="check small" style={{ marginTop: 8 }}>
-          <input type="checkbox" checked={personal.share} onChange={(e) => setPersonal({ ...personal, share: e.target.checked })} />
-          Include my times in link
-        </label>
       </aside>
 
       <section aria-label="Results">
-        {initial.invalid.length > 0 && <div className="note">Invalid link filters reset: {inList(initial.invalid)}.</div>}
-        <div className="fig-sub" style={{ marginBottom: 14 }}>
-          {query}
-        </div>
+        {initial.invalid.length > 0 && <div className="note">Some link settings were invalid and were reset: {inList(initial.invalid)}.</div>}
 
         {incomplete ? (
-          <div className="note">Select at least one month, day, and start time.</div>
+          <div className="note">Pick at least one court time, day, and month.</div>
         ) : r.slotCount === 0 ? (
-          <div className="note">No walkup bookings recorded for this selection.</div>
+          <div className="note">No walk-up bookings in the records for this choice.</div>
         ) : (
           <>
-            <Group title="When courts were booked">
+            <Group title={`${describe(filter)}, ${inList(filter.hours.map(hourLabel))} courts`}>
+              <p style={{ fontSize: 16, maxWidth: 720 }}>
+                On past days like this, half of the {courtText} were taken by <b>{clock(r.pooled.p50)}</b> and three in four by <b>{clock(r.pooled.p75)}</b>.
+                On a typical day the last one went at <b>{clock(r.latest.last.p50)}</b>.
+              </p>
               <div className="readouts">
-                <Readout label="Half booked by" value={clock(r.pooled.p50)} accent sub={`of ${num(r.slotCount)} court-hours`} />
-                <Readout label="A quarter by" value={clock(r.pooled.p25)} />
-                <Readout label="Three quarters by" value={clock(r.pooled.p75)} />
-                <Readout label="Typical day, median" value={clock(r.dayWeighted.p50)} sub={`${clock(r.dayWeighted.p25)}–${clock(r.dayWeighted.p75)}`} />
-              </div>
-              <div className="readouts" style={{ marginTop: 12 }}>
-                <Readout label="Last booking, typical day" value={clock(r.latest.last.p50)} sub={`${clock(r.latest.last.p25)}–${clock(r.latest.last.p75)}`} />
-                <Readout label="Final five began, typical day" value={clock(r.latest.fifthLast.p50)} sub={`${num(r.latest.fifthLast.n)} days with 5+ bookings`} />
-                <Readout label="Dates" value={num(r.days.length)} sub={limited ? 'Limited sample' : `${num(r.zeroQualifyingDates.length)} more with no walkup booking`} />
+                <Readout label="Half taken by" value={clock(r.pooled.p50)} accent />
+                <Readout label="Three in four taken by" value={clock(r.pooled.p75)} />
+                <Readout label="Last one taken (typical day)" value={clock(r.latest.last.p50)} />
+                <Readout label="Based on" value={`${num(r.days.length)} days`} sub={`${num(r.slotCount)} walk-up bookings`} />
               </div>
               {limited && (
                 <div className="note">
-                  Only {r.days.length} dates (a benchmark needs {minDates}).{' '}
+                  Only {r.days.length} days match, so treat these as rough.{' '}
                   {filter.weekdays.length < 5 && (
                     <button className="btn small" type="button" onClick={() => setFilter({ ...filter, weekdays: [1, 2, 3, 4, 5] })}>
-                      Use Mon–Fri
+                      Include all weekdays
                     </button>
                   )}{' '}
                   {filter.months.length < SEASON_MONTHS.length && (
@@ -252,62 +266,76 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
                         setFilter({ ...filter, months: [...set].sort((a, b) => a - b) })
                       }}
                     >
-                      Add adjacent months
+                      Add nearby months
                     </button>
                   )}
                 </div>
               )}
             </Group>
 
-            <div className="cols-2" style={{ marginBottom: 26 }}>
-              <Figure title="How fast each day’s courts went" sub="Share of the day’s walkup bookings made by each time" source="Source: NYC Parks FOIL export. Each grey line is one date.">
-                <CurvesChart result={r} showTarget={bench} />
-              </Figure>
-              <Figure title="When bookings were made" sub={`Walkup bookings per ${BIN} minutes, all dates`} source="Source: NYC Parks FOIL export.">
-                <TimeHistogram bins={r.histogram} binMinutes={BIN} />
-              </Figure>
-            </div>
-
             <Group title="Plan your morning">
               <div className="row" style={{ alignItems: 'flex-end', gap: 24 }}>
                 <div className="readouts" style={{ marginBottom: 0 }}>
                   <Readout
-                    label="Arrive by (benchmark)"
-                    value={bench ? (target == null ? 'n/a' : clock(target)) : 'hidden'}
+                    label="Be in line by"
+                    value={bench ? (target == null ? 'Not enough data' : clock(target)) : 'Hidden'}
                     off={!bench || target == null}
-                    sub={bench && target == null ? `Needs ${minDates}+ dates` : 'Early-side estimate'}
+                    sub={bench && target == null ? `Needs ${minDates}+ days` : 'Errs on the early side'}
                   />
-                  <Readout label="Set alarm for" value={alarm == null || !bench ? '—' : clock(alarm)} accent off={alarm == null || !bench} />
+                  <Readout label="Set your alarm for" value={alarm == null || !bench ? '—' : clock(alarm)} accent off={alarm == null || !bench} />
                 </div>
                 <div className="row">
                   <label className="small">
-                    Get ready <input id="prep" type="number" min={0} max={600} value={personal.prep} onChange={setP('prep')} /> min
+                    Get ready <input type="number" min={0} max={600} value={personal.prep} onChange={setP('prep')} /> min
                   </label>
                   <label className="small">
-                    Travel <input id="travel" type="number" min={0} max={600} value={personal.travel} onChange={setP('travel')} /> min
+                    Travel <input type="number" min={0} max={600} value={personal.travel} onChange={setP('travel')} /> min
                   </label>
                   <label className="small">
-                    Buffer <input id="buf" type="number" min={0} max={600} value={personal.buffer} onChange={setP('buffer')} /> min
+                    Extra buffer <input type="number" min={0} max={600} value={personal.buffer} onChange={setP('buffer')} /> min
                   </label>
                 </div>
               </div>
-              <label className="check small" style={{ marginTop: 10 }}>
-                <input type="checkbox" checked={bench} onChange={(e) => setBench(e.target.checked)} />
-                Show benchmark: each day’s 25th-percentile booking time, 25th percentile across days, rounded down to 15 min
+              <div className="hint">“Be in line by” would have put you ahead of the early rush on most past days. It isn’t a guarantee.</div>
+              <label className="check small" style={{ marginTop: 6 }}>
+                <input type="checkbox" checked={personal.share} onChange={(e) => setPersonal({ ...personal, share: e.target.checked })} />
+                Include my times when I copy the link
               </label>
             </Group>
 
-            <Group title="Every date">
+            <div className="cols-2" style={{ marginBottom: 26 }}>
+              <Figure title="How fast each day’s courts went" sub="Share of the day’s walk-up bookings made by each time" source="Each grey line is one day; blue is the middle day.">
+                <CurvesChart result={r} showTarget={bench} />
+              </Figure>
+              <Figure title="When bookings were made" sub={`Walk-up bookings per ${BIN} minutes, all matching days`} source="Source: NYC Parks FOIL records.">
+                <TimeHistogram bins={r.histogram} binMinutes={BIN} />
+              </Figure>
+            </div>
+
+            <details className="grp">
+              <summary className="fig-title" style={{ cursor: 'pointer' }}>
+                More numbers & every day
+              </summary>
+              <div className="readouts" style={{ margin: '12px 0' }}>
+                <Readout label="A quarter taken by" value={clock(r.pooled.p25)} />
+                <Readout label="Typical day’s midpoint" value={clock(r.dayWeighted.p50)} sub={`${clock(r.dayWeighted.p25)}–${clock(r.dayWeighted.p75)}`} />
+                <Readout label="Last five began (typical day)" value={clock(r.latest.fifthLast.p50)} sub={`${num(r.latest.fifthLast.n)} days with 5+`} />
+                <Readout label="Last one taken, range" value={`${clock(r.latest.last.p25)}–${clock(r.latest.last.p75)}`} />
+              </div>
+              <label className="check small" style={{ marginBottom: 10 }}>
+                <input type="checkbox" checked={bench} onChange={(e) => setBench(e.target.checked)} />
+                Show “be in line by” (each day’s first-quarter time; the early quarter of those days; rounded down to 15 min)
+              </label>
               <div className="grid-wrap">
                 <table className="dg">
                   <thead>
                     <tr>
-                      <th>Date</th>
+                      <th>Day</th>
                       <th className="n">Bookings</th>
                       <th className="n">First</th>
-                      <th className="n">Median</th>
+                      <th className="n">Half by</th>
                       <th className="n">Last</th>
-                      <th>Last five bookings</th>
+                      <th>Last five</th>
                       <th />
                     </tr>
                   </thead>
@@ -323,30 +351,26 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
                         </td>
                         <td className="muted num">{d.lastFive.map((m) => clock(m)).join(' · ')}</td>
                         <td>
-                          <a href={href('courts', { date: d.date })}>Grid</a>
+                          <a href={href('courts', { date: d.date })}>Courts</a>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              {(r.zeroQualifyingDates.length > 0 || r.noRecordDates.length > 0 || r.weatherUnknownDates.length > 0 || r.weatherExcludedDates > 0) && (
-                <details className="small" style={{ marginTop: 8 }}>
-                  <summary>
-                    Not shown: {r.zeroQualifyingDates.length} with no walkup booking · {r.noRecordDates.length} not in export
-                    {test ? ` · ${r.weatherExcludedDates} filtered out · ${r.weatherUnknownDates.length} without weather data` : ''}
-                  </summary>
-                  {r.zeroQualifyingDates.length > 0 && <p>No walkup booking: {r.zeroQualifyingDates.map((d) => longDate(d, false)).join(', ')}</p>}
-                  {r.noRecordDates.length > 0 && <p>Not in export: {r.noRecordDates.map((d) => longDate(d, false)).join(', ')}</p>}
-                  {r.weatherUnknownDates.length > 0 && <p>No weather data: {r.weatherUnknownDates.map((d) => longDate(d, false)).join(', ')}</p>}
-                </details>
+              {(r.zeroQualifyingDates.length > 0 || r.noRecordDates.length > 0 || r.weatherUnknownDates.length > 0) && (
+                <p className="hint">
+                  Not counted: {r.zeroQualifyingDates.length} days with no walk-up booking at these times, {r.noRecordDates.length} days missing from the records
+                  {test ? `, ${r.weatherExcludedDates} filtered out by weather, ${r.weatherUnknownDates.length} without weather data` : ''}.
+                </p>
               )}
-            </Group>
+            </details>
           </>
         )}
         <div className="foot">
-          Each court-hour counts its earliest same-day walkup booking ({timing.cohort_version}), dates before {longDate(cutoff, false)}. These are bookings
-          that succeeded, not the odds of getting a court. <a href={href('methodology')}>Method</a>
+          From NYC Parks records of walk-up bookings that went ahead ({courtText}
+          {filter.courts !== 'all' && walkupCourts.length ? `: ${ranges(walkupCourts)}` : ''}). Shows when courts were taken on past days, not your odds
+          today. <a href={href('methodology')}>How this works</a>
         </div>
       </section>
     </div>

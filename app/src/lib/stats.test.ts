@@ -107,6 +107,21 @@ describe('computePlanner', () => {
   })
 })
 
+describe('court groups', () => {
+  it('walk-up courts only drops bookings on online courts and their records', () => {
+    const t = fixture([['2025-04-02', 18, 400], ['2025-04-02', 18, 500], ['2025-04-09', 18, 450]])
+    t.slots.c = [5, 20, 20] // court 20 is an online court
+    t.court_groups = { walkup: [5], online: [20], online_share: {}, rule: '' }
+    t.hourly.recorded_wc = t.hourly.recorded.map((_, i) => (t.dates[t.hourly.d[i]] === '2025-04-02' ? 1 : 0))
+    const all = computePlanner(t, { ...APR_WED, courts: 'all' }, OPTS)
+    const wc = computePlanner(t, { ...APR_WED, courts: 'walkup' }, OPTS)
+    expect(all.slotCount).toBe(3)
+    expect(wc.slotCount).toBe(1)
+    expect(wc.days.map((d) => d.date)).toEqual(['2025-04-02'])
+    expect(wc.zeroQualifyingDates).toEqual([]) // 04-09 had records only on online courts
+  })
+})
+
 describe('latest bookings', () => {
   it('reports each day’s last and 5th-from-last booking, weighting days equally', () => {
     const d1: [string, number, number][] = [400, 410, 420, 430, 440, 450].map((m) => ['2025-04-02', 18, m])

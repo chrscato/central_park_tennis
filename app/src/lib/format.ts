@@ -31,3 +31,16 @@ export function longDate(date: string, withDow = true): string {
 }
 
 export const inList = (items: string[]) => items.join(', ')
+
+/** [1,2,3,5,7,8] -> "1–3, 5, 7–8" */
+export function ranges(nums: number[]): string {
+  const s = [...nums].sort((a, b) => a - b)
+  const out: string[] = []
+  for (let i = 0; i < s.length; i++) {
+    let j = i
+    while (j + 1 < s.length && s[j + 1] === s[j] + 1) j++
+    out.push(j > i ? `${s[i]}–${s[j]}` : String(s[i]))
+    i = j
+  }
+  return out.join(', ')
+}

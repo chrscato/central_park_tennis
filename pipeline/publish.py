@@ -61,11 +61,11 @@ def overview_payload(slots: pd.DataFrame, daily: pd.DataFrame, cutoff: str) -> d
     }
 
 
-def timing_payload(timing: pd.DataFrame, hourly: pd.DataFrame, cutoff: str, cohort_version: str) -> dict:
+def timing_payload(timing: pd.DataFrame, hourly: pd.DataFrame, cutoff: str, cohort_version: str, groups: dict | None = None) -> dict:
     hourly = hourly[hourly["date"] < cutoff]
     dates = sorted(set(hourly["date"]))
     idx = {d: i for i, d in enumerate(dates)}
-    return {
+    out = {
         "cohort_version": cohort_version,
         "unit": "earliest qualifying successful walkup entry per slot (local minute of day)",
         "dates": dates,
@@ -83,6 +83,11 @@ def timing_payload(timing: pd.DataFrame, hourly: pd.DataFrame, cutoff: str, coho
             "qualifying": hourly["qualifying"].astype(int).tolist(),
         },
     }
+    if groups is not None and "recorded_walkup_courts" in hourly:
+        out["court_groups"] = {k: groups[k] for k in ("walkup", "online", "online_share", "rule")}
+        out["hourly"]["recorded_wc"] = hourly["recorded_walkup_courts"].astype(int).tolist()
+        out["hourly"]["qualifying_wc"] = hourly["qualifying_walkup_courts"].astype(int).tolist()
+    return out
 
 
 def _counts_by_slot(rows: pd.DataFrame, col: str) -> dict[str, dict[str, int]]:
@@ -156,6 +161,7 @@ def write_public(
     timing_df: pd.DataFrame,
     daily_df: pd.DataFrame,
     weather_payload: dict | None = None,
+    insight_payload: dict | None = None,
 ) -> None:
     if staging.exists():
         shutil.rmtree(staging)
@@ -163,6 +169,7 @@ def write_public(
     _dump(staging / "overview.json", overview)
     _dump(staging / "timing.json", timing)
     _dump(staging / "weather.json", weather_payload or {"status": "unavailable"})
+    _dump(staging / "insights.json", insight_payload or {})
     for date, p in partitions.items():
         _dump(staging / "slots" / f"{date}.json", p)
     write_downloads(staging, timing_df, daily_df)
@@ -183,8 +190,12 @@ def audit_public(staging: Path, reasons: set[str]) -> list[tuple[str, str]]:
 
 
 def promote(staging: Path, target: Path) -> None:
-    """Swap staging into place, keeping the previous good build alongside."""
-    previous = target.with_name(target.name + ".previous")
+    """Swap staging into place, keeping the previous good build as a backup.
+
+    The backup sits outside the web root's parent (e.g. app/.public-data.previous)
+    so static-site bundlers never copy it into the published site.
+    """
+    previous = target.parent.parent / f".{target.parent.name}-{target.name}.previous"
     if previous.exists():
         shutil.rmtree(previous)
     if not target.exists():

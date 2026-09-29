@@ -1,30 +1,30 @@
 import { useEffect } from 'react'
 import { LoadError, Loading, useAsync, ViewBoundary } from './components/common'
-import { loadManifest, loadOverview, loadTiming, loadWeather } from './lib/data'
+import { loadInsights, loadManifest, loadOverview, loadTiming, loadWeather, type Insights as InsightsData } from './lib/data'
 import { longDate } from './lib/format'
 import { href, useLocation, type Route } from './lib/url'
 import type { WeatherData } from './lib/weather'
-import { Anomalies } from './views/Anomalies'
 import { Courts } from './views/Courts'
+import { Insights } from './views/Insights'
 import { Methodology } from './views/Methodology'
 import { Outlook } from './views/Outlook'
 import { Planner } from './views/Planner'
 import { Weather } from './views/Weather'
 
 const NAV: { route: Route; label: string }[] = [
-  { route: 'planner', label: 'Booking times' },
-  { route: 'outlook', label: 'Rain outlook' },
-  { route: 'courts', label: 'Court records' },
-  { route: 'weather', label: 'Rain vs. closures' },
-  { route: 'anomalies', label: 'Anomalies' },
-  { route: 'methodology', label: 'Methodology' },
+  { route: 'planner', label: 'When to go' },
+  { route: 'outlook', label: 'After rain' },
+  { route: 'weather', label: 'Rain & closures' },
+  { route: 'courts', label: 'Court history' },
+  { route: 'insights', label: 'Insights' },
+  { route: 'methodology', label: 'About the data' },
 ]
 
 const UNAVAILABLE: WeatherData = { status: 'unavailable', reason: 'weather.json not found' } as WeatherData
 
 export default function App() {
   const loc = useLocation()
-  const data = useAsync(() => Promise.all([loadManifest(), loadOverview(), loadTiming(), loadWeather().catch(() => UNAVAILABLE)]), [])
+  const data = useAsync(() => Promise.all([loadManifest(), loadOverview(), loadTiming(), loadWeather().catch(() => UNAVAILABLE), loadInsights().catch(() => ({}) as InsightsData)]), [])
   const label = NAV.find((n) => n.route === loc.route)?.label ?? ''
 
   useEffect(() => {
@@ -66,13 +66,13 @@ export default function App() {
       </header>
 
       <main>
-        {loc.invalid && <div className="note">Unknown page; showing booking times.</div>}
+        {loc.invalid && <div className="note">Unknown page; showing When to go.</div>}
         {data.status === 'loading' && <Loading what="records" />}
         {data.status === 'error' && <LoadError error={data.error} />}
         {ready && (
           <ViewBoundary resetKey={loc.route}>
             {(() => {
-              const [manifest, ov, t, w] = ready
+              const [manifest, ov, t, w, ins] = ready
               switch (loc.route) {
                 case 'outlook':
                   return <Outlook manifest={manifest} timing={t} weather={w} />
@@ -80,8 +80,8 @@ export default function App() {
                   return <Courts manifest={manifest} overview={ov} weather={w} params={loc.params} />
                 case 'weather':
                   return <Weather manifest={manifest} overview={ov} weather={w} />
-                case 'anomalies':
-                  return <Anomalies manifest={manifest} weather={w} />
+                case 'insights':
+                  return <Insights manifest={manifest} insights={ins} />
                 case 'methodology':
                   return <Methodology manifest={manifest} />
                 default:

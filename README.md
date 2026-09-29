@@ -42,23 +42,30 @@ The sanitized public assets in `app/public/data/` are committed, so `npm run dev
 
 Input paths, the historical cutoff, timezone, and weather units are set in `config/pipeline.toml`. Source files are never modified. If weather inputs are missing, the build still succeeds and the app shows weather as unavailable.
 
-## What's in the draft
+## What's in the site
 
-Lean editorial UI: serif section heads, key-figure rows, charts with title / subtitle / source line, and tables with horizontal rules only. Tabs:
+Tabs, in plain language:
 
-- **Booking times** (default): filters for month, day, court start time, season, rain before, and late-opening mornings. Shows:
-  - when courts were booked (25/50/75%, typical day)
-  - how late courts were still being booked (the typical day's last booking and when its final five began)
-  - two charts: daily booking curves and bookings per 15 minutes
-  - arrive-by benchmark (suppressed below 10 dates) and alarm calculator
-  - every date with its last five booking times
+- **When to go** (home): pick court time, day and month. You get a one-sentence answer (half taken by…, three in four by…, last one typically at…), a "be in line by" time with an alarm calculator, and two charts: how fast each day's courts went, and when bookings were made. Counts **walk-up bookings only**, on **walk-up courts** by default: courts 19–24 are mostly booked online and left out unless you choose All. More filters (season, rain before, mornings closed by rain) and every day's detail are tucked away.
+- **After rain**: live Central Park rain for yesterday or the last 2–3 days (NWS), or a number you enter. It shows how past days like it went: when courts came back, how often mornings were closed, and how much sooner afternoon and evening walk-ups went.
+- **Rain & closures**: how much rain closes courts (same day, day before, 2- and 3-day totals), and days that were closed with little or no rain. Each of those days gets a label (no rain nearby / rain came later / wet from earlier days) and an hour-by-hour chart of rain against court status. Also split decisions, adjustable thresholds, and sources.
+- **Court history**: any date as a grid, with times down the side, courts across, and a rain column.
+- **Insights**: singles vs doubles, inferred 2-hour bookings, and when partners are checked in relative to the 15-minute rule.
+- **About the data**: sources, checksums, assumptions, reconciliation, limits.
 
-  Filters are encoded in the URL; travel times are included only if you opt in.
-- **Rain outlook**: live Central Park rain from the NWS feed for yesterday, the last 2 days, or the last 3 days (or a manual value). For comparable past days, it shows the rained-out share by start hour, when recorded play resumed, and how often mornings washed out. It also shows how much earlier afternoon and evening walkups go on late-opening days.
-- **Court records**: per-date grid with start times down the side and courts 1–26 across, plus a rain column, day and 1-/2-/3-day rain, and sanitized slot details.
-- **Rain vs. closures**: small multiples of rained-out share by rainfall for the same day, the day before, 2- and 3-day totals, and 0/3/6/24 hours before the slot. Also a combined table, a daily timeline, and sources.
-- **Anomalies**: rain-outs with little rain in the 24 hours before, sorted into "no rain nearby", "rain came later" (closed ahead of rain), or "wet from earlier days"; thresholds are adjustable. Also a scatter of every date, and "split decisions" (some courts rained out while others were checked in the same hour).
-- **Methodology**: checksums, assumptions, reconciliation, ledgers, downloads, limits, records still needed.
+## Publish on GitHub Pages (free)
+
+The site is fully static (hash-based URLs, relative asset paths), so GitHub Pages can host it as-is. The workflow `.github/workflows/pages.yml` runs the front-end tests, builds `app/dist`, and deploys it on every push to `main` that touches `app/`.
+
+One-time setup:
+
+1. Make the repository public (free plans only serve Pages from public repos): **Settings → General → Danger zone → Change visibility**. Only sanitized data is in the repo and its history; the raw FOIL CSV is not.
+2. **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+3. Push to `main` (or run the workflow from the Actions tab). The site appears at `https://<user>.github.io/central_park_tennis/`.
+
+To update the data: run `python -m pipeline.build` locally, check `python -m pipeline.audit app/dist` after `npm run build`, then commit `app/public/data` and push. CI never sees the raw export.
+
+The live rain readings come straight from the National Weather Service API in the visitor's browser, so they work on Pages with no server or key.
 
 ## Verified against earlier analysis
 

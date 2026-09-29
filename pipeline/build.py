@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import core, publish, weather_payload
+from . import core, insights, publish, weather_payload
 
 PIPELINE_VERSION = "0.1.0"
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,7 +66,8 @@ def run(config_path: Path) -> int:
     print("[4/6] successful walkup cohort")
     cb = core.walkup_cohort(norm, slots, cutoff)
     timing = cb.timing
-    hourly = core.coverage_hourly(slots, timing)
+    groups = core.court_groups(norm, slots)
+    hourly = core.coverage_hourly(slots, timing, groups["walkup"])
     daily = core.coverage_daily(slots, cutoff)
 
     ref = core.planner_reference(timing, month=4, weekday=2, hours=[18])
@@ -162,6 +163,7 @@ def run(config_path: Path) -> int:
             "min_dates_for_planning_target": cfg["metrics"]["min_dates_for_planning_target"],
         },
         "reference_checks": [{"name": "april_wednesday_6pm", **ref}],
+        "court_groups": groups,
     }
 
     print("[4b] weather")
@@ -186,6 +188,13 @@ def run(config_path: Path) -> int:
         wx, wx_by_date = {"status": "unavailable", "reason": str(e)}, {}
     manifest["weather"] = {k: wx.get(k) for k in ("status", "coverage", "reconciliation", "warnings")}
 
+    print("[4c] insights")
+    insight_payload = {
+        "party_size": insights.party_sizes(norm, slots, cutoff, groups["walkup"]),
+        "two_hour": insights.two_hour_bookings(norm, slots, cutoff),
+        "partner_entry": insights.partner_entry(norm, slots, cutoff, groups["walkup"]),
+    }
+
     print("[5/6] writing private intermediates")
     processed.mkdir(parents=True, exist_ok=True)
     slots.to_parquet(processed / "slots.parquet", index=False)
@@ -199,11 +208,12 @@ def run(config_path: Path) -> int:
         staging,
         manifest,
         publish.overview_payload(slots, daily, cutoff),
-        publish.timing_payload(timing, hourly, cutoff, cohort_version),
+        publish.timing_payload(timing, hourly, cutoff, cohort_version, groups),
         publish.slot_partitions(norm, slots, timing, cutoff, wx_by_date),
         timing,
         daily,
         wx,
+        insight_payload,
     )
     leaks = publish.audit_public(staging, core.reason_strings(raw))
     if leaks:
