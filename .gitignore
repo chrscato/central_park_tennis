@@ -4,6 +4,7 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 *.csv
+!app/public/data/downloads/*.csv
 *.parquet
 *.duckdb
 
@@ -16,9 +17,12 @@ __pycache__/
 # Node
 node_modules/
 app/dist/
+app/public/data.staging/
+app/public/data.previous/
 
 # OS / editor
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+*.tsbuildinfo

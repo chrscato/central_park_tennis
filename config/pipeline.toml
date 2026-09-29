@@ -1,0 +1,37 @@
+# Central Park Tennis Watch — pipeline configuration.
+# Paths are relative to the repository root unless absolute.
+
+[inputs]
+reservations_csv = "data/raw/central_park_tennis_FOIL_request.csv"
+data_dictionary = "data/raw/central_park_reservation_FOIL_data_dictionary_updated.txt"
+# Retrieval / extraction time is not supplied by the agency. Leave blank until confirmed.
+agency_extraction_time = ""
+
+[snapshot]
+label = "foil-export-1"
+# Apparent snapshot boundary (latest booking/cancellation activity in the export).
+# NOT an agency-confirmed extraction timestamp. Reservation dates on or after this
+# date are treated as post-snapshot and excluded from historical outcomes.
+historical_outcome_cutoff = "2026-09-22"
+cutoff_status = "unconfirmed"
+
+[time]
+# Provisional interpretation of the naive source timestamps.
+timezone = "America/New_York"
+
+[metrics]
+walkup_cohort_version = "successful-walkup-v1"
+min_dates_for_planning_target = 10
+
+[weather]
+# NOAA LCD exports for USW00094728 (Central Park). Glob; byte-identical duplicates are skipped.
+lcd_glob = "data/nyc_weather/LCD_USW00094728_*.csv"
+# Units chosen when the LCD file was ordered. The supplied files are METRIC (mm, degrees C).
+lcd_units = "metric"
+# IEM ASOS export for station NYC with valid times in America/New_York.
+iem_csv = "data/NYC_weather.csv"
+dry_definition_version = "dry-v1"
+
+[outputs]
+processed_dir = "data/processed"
+public_dir = "app/public/data"
