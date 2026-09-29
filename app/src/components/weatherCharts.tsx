@@ -6,72 +6,51 @@ import { niceTicks, Tooltip, topRounded, type Tip } from './charts'
 import { useWidth } from './common'
 
 /** Horizontal bars: recorded rained-out share per rainfall bucket. One series, text labels at bar ends. */
-export function BucketBars({ rows, unitLabel }: { rows: BucketRow[]; unitLabel: string }) {
+export function BucketBars({ rows, max }: { rows: BucketRow[]; max: number }) {
   const [ref, width] = useWidth<HTMLDivElement>()
-  const labelW = Math.min(130, Math.max(96, width * 0.3))
-  const valueW = 64
-  const bar = 18
-  const gap = 12
-  const shown = rows.filter((r) => r.units > 0)
-  const max = Math.max(0.05, ...shown.map((r) => r.share ?? 0))
+  const labelW = 78
+  const valueW = 40
+  const bar = 14
+  const gap = 10
+  const shown = rows.filter((r) => r.units > 0 && r.bucket !== 'missing')
   const iw = Math.max(0, width - labelW - valueW)
   const height = shown.length * (bar + gap)
   return (
     <div className="chart" ref={ref}>
       {width > 0 && (
-        <svg width={width} height={height} role="img" aria-label="Recorded rained-out share by rainfall bucket">
+        <svg width={width} height={height} role="img" aria-label="Recorded rained-out share by rainfall">
           {shown.map((r, i) => {
             const y = i * (bar + gap)
-            const w = r.share == null ? 0 : (r.share / max) * iw
-            const missing = r.bucket === 'missing'
+            const w = r.share == null ? 0 : (Math.min(r.share, max) / max) * iw
             return (
               <g key={r.bucket}>
-                <text x={0} y={y + bar / 2} dy="0.32em" style={{ fontSize: 11 }}>
-                  {BUCKET_LABEL[r.bucket]}
+                <text x={0} y={y + bar / 2} dy="0.32em">
+                  {BUCKET_SHORT[r.bucket]}
                 </text>
-                <rect x={labelW} y={y} width={iw} height={bar} fill="var(--grid)" stroke="var(--rule)" />
-                {w > 0 && (
-                  <path
-                    d={topRounded(0, 0, bar, w, 0)}
-                    transform={`translate(${labelW + w},${y}) rotate(90)`}
-                    fill={missing ? 'var(--hatch)' : 'var(--st-rained-out)'}
-                  />
-                )}
-                <text x={labelW + iw + 8} y={y + bar / 2} dy="0.32em" className="num" style={{ fontWeight: 700, fontSize: 11 }}>
-                  {pct(r.share)}
+                <rect x={labelW} y={y} width={iw} height={bar} fill="var(--hair-2)" />
+                {w > 0 && <rect x={labelW} y={y} width={w} height={bar} fill="var(--st-rained-out)" />}
+                <text x={labelW + iw + 6} y={y + bar / 2} dy="0.32em" className="num" style={{ fontWeight: 600, fill: 'var(--ink)' }}>
+                  {pct(r.share, 0)}
                 </text>
               </g>
             )
           })}
         </svg>
       )}
-      <div className="grid-wrap sunken" style={{ marginTop: 8 }}>
-        <table className="dg">
-          <thead>
-            <tr>
-              <th>Rainfall</th>
-              <th className="n">{unitLabel}</th>
-              <th className="n">Recorded court-hours</th>
-              <th className="n">Rained out</th>
-              <th className="n">Share</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.bucket}>
-                <td>{BUCKET_LABEL[r.bucket]}</td>
-                <td className="n">{num(r.units)}</td>
-                <td className="n">{num(r.recorded)}</td>
-                <td className="n">{num(r.rainedOut)}</td>
-                <td className="n">{pct(r.share)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
   )
 }
+
+const BUCKET_SHORT: Record<string, string> = {
+  dry: 'Dry',
+  trace: 'Trace',
+  light: '0.01–0.09"',
+  moderate: '0.10–0.49"',
+  heavy: '0.50"+',
+  missing: 'No data',
+}
+
+export { BUCKET_LABEL }
 
 /**
  * Two aligned daily column charts sharing one x-axis (never a dual y-axis):

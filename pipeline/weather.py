@@ -278,4 +278,7 @@ def slot_hour_features(grid: pd.DataFrame, cells: pd.DataFrame) -> pd.DataFrame:
     out["during_in"], out["during_trace"] = window(1, 0)
     for n in (3, 6, 24):
         out[f"prev{n}h_in"], out[f"prev{n}h_trace"] = window(n, -1)
+    # Rain AFTER the slot starts (obs ending (H+1):51 .. (H+6):51). Descriptive only:
+    # used to recognise closures made ahead of rain that arrived later.
+    out["next6h_in"], out["next6h_trace"] = window(6, 6)
     return out

@@ -3,8 +3,8 @@
 
 import { useEffect, useState } from 'react'
 
-export type Route = 'planner' | 'outlook' | 'courts' | 'weather' | 'methodology'
-const ROUTES: Route[] = ['planner', 'outlook', 'courts', 'weather', 'methodology']
+export type Route = 'planner' | 'outlook' | 'courts' | 'weather' | 'anomalies' | 'methodology'
+const ROUTES: Route[] = ['planner', 'outlook', 'courts', 'weather', 'anomalies', 'methodology']
 
 export interface Location {
   route: Route

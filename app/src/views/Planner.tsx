@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CurvesChart, TimeHistogram } from '../components/charts'
-import { Group, Readout } from '../components/common'
+import { Figure, Group, Readout } from '../components/common'
 import type { Manifest, Timing } from '../lib/data'
 import { clock, hourLabel, inList, longDate, MONTHS, num, WEEKDAYS } from '../lib/format'
 import { combineTests, OPENING_FILTER, openingTest, type OpeningFilter } from '../lib/outlook'
@@ -84,7 +84,7 @@ function Checks({ options, selected, onChange, label, cols }: { options: number[
       {options.map((o) => (
         <label key={o}>
           <input type="checkbox" checked={selected.includes(o)} onChange={() => onChange(toggle(selected, o))} />
-          {label(o)}
+          <span>{label(o)}</span>
         </label>
       ))}
     </div>
@@ -143,7 +143,6 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
 
   return (
     <div className="split">
-      {/* ---------------- query pane ---------------- */}
       <aside>
         <Group title="Month">
           <Checks cols={4} options={SEASON_MONTHS} selected={filter.months} onChange={(months) => setFilter({ ...filter, months })} label={(m) => MONTHS[m - 1]} />
@@ -158,12 +157,12 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
           <div className="checks c3">
             <label>
               <input type="radio" name="season" checked={!filter.years.length} onChange={() => setFilter({ ...filter, years: [] })} />
-              All
+              <span>All</span>
             </label>
             {years.map((y) => (
               <label key={y}>
                 <input type="radio" name="season" checked={filter.years.length === 1 && filter.years[0] === y} onChange={() => setFilter({ ...filter, years: [y] })} />
-                {y}
+                <span>{y}</span>
               </label>
             ))}
           </div>
@@ -187,7 +186,7 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
               ))}
             </select>
           </div>
-          <div className="hint">Late opening = 50%+ of 7–11 AM courts rained out.</div>
+          <div className="hint">Late opening: half or more of 7–11 AM courts rained out.</div>
         </Group>
         <div className="row">
           <button className="btn" type="button" onClick={copyLink}>
@@ -205,109 +204,111 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
             Reset
           </button>
         </div>
-        <label className="check small" style={{ marginTop: 6 }}>
+        <label className="check small" style={{ marginTop: 8 }}>
           <input type="checkbox" checked={personal.share} onChange={(e) => setPersonal({ ...personal, share: e.target.checked })} />
           Include my times in link
         </label>
       </aside>
 
-      {/* ---------------- results pane ---------------- */}
       <section aria-label="Results">
         {initial.invalid.length > 0 && <div className="note">Invalid link filters reset: {inList(initial.invalid)}.</div>}
-        <div className="small" style={{ marginBottom: 6 }}>
-          <b>Query:</b> {query}
+        <div className="fig-sub" style={{ marginBottom: 14 }}>
+          {query}
         </div>
 
         {incomplete ? (
           <div className="note">Select at least one month, day, and start time.</div>
         ) : r.slotCount === 0 ? (
-          <div className="note">No qualifying walkup bookings for this query.</div>
+          <div className="note">No walkup bookings recorded for this selection.</div>
         ) : (
           <>
-            <div className="readouts">
-              <Readout label="Half booked by" value={clock(r.pooled.p50)} accent sub={`${num(r.slotCount)} slots`} />
-              <Readout label="25% booked by" value={clock(r.pooled.p25)} />
-              <Readout label="75% booked by" value={clock(r.pooled.p75)} />
-              <Readout label="Typical day (median)" value={clock(r.dayWeighted.p50)} sub={`${clock(r.dayWeighted.p25)}–${clock(r.dayWeighted.p75)}`} />
-              <Readout label="Dates" value={num(r.days.length)} sub={limited ? 'Limited sample' : `of ${num(r.days.length + r.zeroQualifyingDates.length)} with records`} />
-            </div>
-            {limited && (
-              <div className="note">
-                Limited sample: {r.days.length} dates (min {minDates} for a benchmark).{' '}
-                {filter.weekdays.length < 5 && (
-                  <button className="btn small" type="button" onClick={() => setFilter({ ...filter, weekdays: [1, 2, 3, 4, 5] })}>
-                    Use Mon–Fri
-                  </button>
-                )}{' '}
-                {filter.months.length < SEASON_MONTHS.length && (
-                  <button
-                    className="btn small"
-                    type="button"
-                    onClick={() => {
-                      const set = new Set(filter.months)
-                      filter.months.forEach((m) => [m - 1, m + 1].forEach((x) => SEASON_MONTHS.includes(x) && set.add(x)))
-                      setFilter({ ...filter, months: [...set].sort((a, b) => a - b) })
-                    }}
-                  >
-                    Add adjacent months
-                  </button>
-                )}
+            <Group title="When courts were booked">
+              <div className="readouts">
+                <Readout label="Half booked by" value={clock(r.pooled.p50)} accent sub={`of ${num(r.slotCount)} court-hours`} />
+                <Readout label="A quarter by" value={clock(r.pooled.p25)} />
+                <Readout label="Three quarters by" value={clock(r.pooled.p75)} />
+                <Readout label="Typical day, median" value={clock(r.dayWeighted.p50)} sub={`${clock(r.dayWeighted.p25)}–${clock(r.dayWeighted.p75)}`} />
               </div>
-            )}
+              <div className="readouts" style={{ marginTop: 12 }}>
+                <Readout label="Last booking, typical day" value={clock(r.latest.last.p50)} sub={`${clock(r.latest.last.p25)}–${clock(r.latest.last.p75)}`} />
+                <Readout label="Final five began, typical day" value={clock(r.latest.fifthLast.p50)} sub={`${num(r.latest.fifthLast.n)} days with 5+ bookings`} />
+                <Readout label="Dates" value={num(r.days.length)} sub={limited ? 'Limited sample' : `${num(r.zeroQualifyingDates.length)} more with no walkup booking`} />
+              </div>
+              {limited && (
+                <div className="note">
+                  Only {r.days.length} dates (a benchmark needs {minDates}).{' '}
+                  {filter.weekdays.length < 5 && (
+                    <button className="btn small" type="button" onClick={() => setFilter({ ...filter, weekdays: [1, 2, 3, 4, 5] })}>
+                      Use Mon–Fri
+                    </button>
+                  )}{' '}
+                  {filter.months.length < SEASON_MONTHS.length && (
+                    <button
+                      className="btn small"
+                      type="button"
+                      onClick={() => {
+                        const set = new Set(filter.months)
+                        filter.months.forEach((m) => [m - 1, m + 1].forEach((x) => SEASON_MONTHS.includes(x) && set.add(x)))
+                        setFilter({ ...filter, months: [...set].sort((a, b) => a - b) })
+                      }}
+                    >
+                      Add adjacent months
+                    </button>
+                  )}
+                </div>
+              )}
+            </Group>
 
-            <div className="cols-2" style={{ marginTop: 8 }}>
-              <Group title="Share of each day's bookings made by time">
-                <div className="chart-frame sunken">
-                  <CurvesChart result={r} showTarget={bench} />
-                </div>
-              </Group>
-              <Group title={`Bookings per ${BIN} minutes (all dates)`}>
-                <div className="chart-frame sunken">
-                  <TimeHistogram bins={r.histogram} binMinutes={BIN} />
-                </div>
-              </Group>
+            <div className="cols-2" style={{ marginBottom: 26 }}>
+              <Figure title="How fast each day’s courts went" sub="Share of the day’s walkup bookings made by each time" source="Source: NYC Parks FOIL export. Each grey line is one date.">
+                <CurvesChart result={r} showTarget={bench} />
+              </Figure>
+              <Figure title="When bookings were made" sub={`Walkup bookings per ${BIN} minutes, all dates`} source="Source: NYC Parks FOIL export.">
+                <TimeHistogram bins={r.histogram} binMinutes={BIN} />
+              </Figure>
             </div>
 
-            <Group title="Benchmark & alarm">
-              <div className="row" style={{ alignItems: 'stretch' }}>
-                <div style={{ minWidth: 150 }}>
+            <Group title="Plan your morning">
+              <div className="row" style={{ alignItems: 'flex-end', gap: 24 }}>
+                <div className="readouts" style={{ marginBottom: 0 }}>
                   <Readout
                     label="Arrive by (benchmark)"
                     value={bench ? (target == null ? 'n/a' : clock(target)) : 'hidden'}
                     off={!bench || target == null}
-                    sub={bench && target == null ? `Needs ${minDates}+ dates` : undefined}
+                    sub={bench && target == null ? `Needs ${minDates}+ dates` : 'Early-side estimate'}
                   />
-                </div>
-                <div className="field" style={{ alignSelf: 'center' }}>
-                  <label htmlFor="prep">Get ready (min)</label>
-                  <input id="prep" type="number" min={0} max={600} value={personal.prep} onChange={setP('prep')} />
-                  <label htmlFor="travel">Travel (min)</label>
-                  <input id="travel" type="number" min={0} max={600} value={personal.travel} onChange={setP('travel')} />
-                  <label htmlFor="buf">Buffer (min)</label>
-                  <input id="buf" type="number" min={0} max={600} value={personal.buffer} onChange={setP('buffer')} />
-                </div>
-                <div style={{ minWidth: 150 }}>
                   <Readout label="Set alarm for" value={alarm == null || !bench ? '—' : clock(alarm)} accent off={alarm == null || !bench} />
                 </div>
+                <div className="row">
+                  <label className="small">
+                    Get ready <input id="prep" type="number" min={0} max={600} value={personal.prep} onChange={setP('prep')} /> min
+                  </label>
+                  <label className="small">
+                    Travel <input id="travel" type="number" min={0} max={600} value={personal.travel} onChange={setP('travel')} /> min
+                  </label>
+                  <label className="small">
+                    Buffer <input id="buf" type="number" min={0} max={600} value={personal.buffer} onChange={setP('buffer')} /> min
+                  </label>
+                </div>
               </div>
-              <label className="check small" style={{ marginTop: 6 }}>
+              <label className="check small" style={{ marginTop: 10 }}>
                 <input type="checkbox" checked={bench} onChange={(e) => setBench(e.target.checked)} />
-                Show benchmark (25th pct of each day's 25th-pct booking time, rounded down to 15 min)
+                Show benchmark: each day’s 25th-percentile booking time, 25th percentile across days, rounded down to 15 min
               </label>
             </Group>
 
-            <Group title={`Dates (${num(r.days.length)})`}>
-              <div className="grid-wrap sunken">
+            <Group title="Every date">
+              <div className="grid-wrap">
                 <table className="dg">
                   <thead>
                     <tr>
                       <th>Date</th>
-                      <th className="n">Slots</th>
+                      <th className="n">Bookings</th>
                       <th className="n">First</th>
-                      <th className="n">25%</th>
                       <th className="n">Median</th>
                       <th className="n">Last</th>
-                      <th>Grid</th>
+                      <th>Last five bookings</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
@@ -316,11 +317,13 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
                         <td>{longDate(d.date)}</td>
                         <td className="n">{d.times.length}</td>
                         <td className="n">{clock(d.times[0])}</td>
-                        <td className="n">{clock(d.p25)}</td>
                         <td className="n">{clock(d.p50)}</td>
-                        <td className="n">{clock(d.times[d.times.length - 1])}</td>
+                        <td className="n">
+                          <b>{clock(d.last)}</b>
+                        </td>
+                        <td className="muted num">{d.lastFive.map((m) => clock(m)).join(' · ')}</td>
                         <td>
-                          <a href={href('courts', { date: d.date })}>Open</a>
+                          <a href={href('courts', { date: d.date })}>Grid</a>
                         </td>
                       </tr>
                     ))}
@@ -328,10 +331,10 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
                 </table>
               </div>
               {(r.zeroQualifyingDates.length > 0 || r.noRecordDates.length > 0 || r.weatherUnknownDates.length > 0 || r.weatherExcludedDates > 0) && (
-                <details className="small" style={{ marginTop: 4 }}>
+                <details className="small" style={{ marginTop: 8 }}>
                   <summary>
-                    Excluded: {r.zeroQualifyingDates.length} no walkup booking · {r.noRecordDates.length} not in export
-                    {test ? ` · ${r.weatherExcludedDates} filtered · ${r.weatherUnknownDates.length} no weather data` : ''}
+                    Not shown: {r.zeroQualifyingDates.length} with no walkup booking · {r.noRecordDates.length} not in export
+                    {test ? ` · ${r.weatherExcludedDates} filtered out · ${r.weatherUnknownDates.length} without weather data` : ''}
                   </summary>
                   {r.zeroQualifyingDates.length > 0 && <p>No walkup booking: {r.zeroQualifyingDates.map((d) => longDate(d, false)).join(', ')}</p>}
                   {r.noRecordDates.length > 0 && <p>Not in export: {r.noRecordDates.map((d) => longDate(d, false)).join(', ')}</p>}
@@ -342,8 +345,8 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
           </>
         )}
         <div className="foot">
-          Times = earliest same-day walkup booking per checked-in court, {timing.cohort_version}, dates before {longDate(cutoff, false)}. Successful
-          bookings only — not the odds of getting a court. <a href={href('methodology')}>Method</a>
+          Each court-hour counts its earliest same-day walkup booking ({timing.cohort_version}), dates before {longDate(cutoff, false)}. These are bookings
+          that succeeded, not the odds of getting a court. <a href={href('methodology')}>Method</a>
         </div>
       </section>
     </div>

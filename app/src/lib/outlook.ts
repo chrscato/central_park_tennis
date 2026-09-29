@@ -3,7 +3,7 @@
 // *recorded* statuses only — not official closure decisions, and not a
 // probability that any person gets a court.
 
-import { bucketOf, dayIndex, type Bucket, type WeatherData } from './weather'
+import { bucketOf, dayIndex, windowValue, type Bucket, type WeatherData } from './weather'
 import { quantile } from './stats'
 
 export const MORNING_HOURS = [7, 8, 9, 10, 11]
@@ -57,7 +57,10 @@ export interface HourRow {
   dates: number
 }
 
+export type OutlookWindow = 'prev1' | 'trail2' | 'trail3'
+
 export interface OutlookResult {
+  window: OutlookWindow
   bucket: Bucket
   dates: string[]
   hours: HourRow[]
@@ -68,17 +71,19 @@ export interface OutlookResult {
 }
 
 /**
- * Past dates whose previous-day rain falls in the same bucket as `prevRain`,
- * optionally restricted to dates with no measurable rain that day.
+ * Past dates whose rain over the chosen window (previous day, or the 2 / 3 days
+ * before) falls in the same bucket as `rain`, optionally restricted to dates with
+ * no measurable rain that day.
  */
-export function outlook(w: WeatherData, prevRain: number, prevTrace: boolean, today: TodayAssumption): OutlookResult {
-  const bucket = bucketOf(prevRain, prevTrace)
+export function outlook(w: WeatherData, rain: number, trace: boolean, today: TodayAssumption, window: OutlookWindow = 'prev1'): OutlookResult {
+  const bucket = bucketOf(rain, trace)
   const idx = dayIndex(w)
   const cond = dayConditions(w)
   const dates = new Set<string>()
   for (const [date, day] of idx) {
     if (!cond.has(date)) continue
-    if (bucketOf(day.prev1, day.prev1Trace) !== bucket) continue
+    const [v, t] = windowValue(day, window)
+    if (bucketOf(v, t) !== bucket) continue
     if (today === 'dry' && (day.rain == null || day.rain > 0)) continue
     dates.add(date)
   }
@@ -105,6 +110,7 @@ export function outlook(w: WeatherData, prevRain: number, prevTrace: boolean, to
   const firsts = conds.map((x) => x.firstPlayHour).filter((x): x is number => x != null).sort((a, b) => a - b)
 
   return {
+    window,
     bucket,
     dates: [...dates].sort(),
     hours,

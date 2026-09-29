@@ -61,6 +61,8 @@ export interface DaySeries {
   times: number[] // ascending minute-of-day of qualifying entries
   p25: number
   p50: number
+  last: number // latest qualifying booking that day
+  lastFive: number[] // the day's final (up to) five booking times, ascending
 }
 
 export interface PlannerResult {
@@ -68,6 +70,8 @@ export interface PlannerResult {
   pooled: { p25: number | null; p50: number | null; p75: number | null }
   days: DaySeries[]
   dayWeighted: { p25: number | null; p50: number | null; p75: number | null } // of daily medians
+  /** Across days (each day once): the day's last booking, and the day's 5th-from-last booking (days with 5+ bookings). */
+  latest: { last: { p25: number | null; p50: number | null; p75: number | null }; fifthLast: { p50: number | null; n: number } }
   zeroQualifyingDates: string[] // recorded slots in window but no qualifying entry
   noRecordDates: string[] // matching calendar dates with no recorded slots in window
   weatherExcludedDates: number // calendar-matching dates with records that fail the weather condition
@@ -140,7 +144,14 @@ export function computePlanner(t: Timing, f: PlannerFilter, opts: PlannerOptions
     .sort((a, b) => a[0] - b[0])
     .map(([di, times]) => {
       times.sort((a, b) => a - b)
-      return { date: t.dates[di], times, p25: quantile(times, 0.25)!, p50: quantile(times, 0.5)! }
+      return {
+        date: t.dates[di],
+        times,
+        p25: quantile(times, 0.25)!,
+        p50: quantile(times, 0.5)!,
+        last: times[times.length - 1],
+        lastFive: times.slice(-5),
+      }
     })
 
   const zeroQualifyingDates: string[] = []
@@ -160,6 +171,12 @@ export function computePlanner(t: Timing, f: PlannerFilter, opts: PlannerOptions
   }
 
   const medians = days.map((x) => x.p50).sort((a, b) => a - b)
+  const lasts = days.map((x) => x.last).sort((a, b) => a - b)
+  const fifths = days.filter((x) => x.times.length >= 5).map((x) => x.times[x.times.length - 5]).sort((a, b) => a - b)
+  const latest = {
+    last: { p25: quantile(lasts, 0.25), p50: quantile(lasts, 0.5), p75: quantile(lasts, 0.75) },
+    fifthLast: { p50: quantile(fifths, 0.5), n: fifths.length },
+  }
   const dayWeighted = { p25: quantile(medians, 0.25), p50: quantile(medians, 0.5), p75: quantile(medians, 0.75) }
 
   let planningTarget: PlannerResult['planningTarget']
@@ -179,6 +196,7 @@ export function computePlanner(t: Timing, f: PlannerFilter, opts: PlannerOptions
     pooled: { p25: quantile(pooledTimes, 0.25), p50: quantile(pooledTimes, 0.5), p75: quantile(pooledTimes, 0.75) },
     days,
     dayWeighted,
+    latest,
     zeroQualifyingDates,
     noRecordDates,
     weatherExcludedDates: weatherExcluded.size,

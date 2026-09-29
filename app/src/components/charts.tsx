@@ -85,7 +85,7 @@ export function CurvesChart({ result, showTarget }: { result: PlannerResult; sho
     <div className="chart" ref={ref}>
       <div className="legend">
         <span className="legend-item">
-          <span className="line-key" style={{ borderColor: '#9a9a9a', borderTopWidth: 1 }} />
+          <span className="line-key" style={{ borderColor: '#bcb6ab', borderTopWidth: 1 }} />
           Each date ({result.days.length})
         </span>
         <span className="legend-item">
@@ -93,7 +93,7 @@ export function CurvesChart({ result, showTarget }: { result: PlannerResult; sho
           Median date
         </span>
         <span className="legend-item">
-          <span className="swatch" style={{ background: '#b9cde8' }} />
+          <span className="swatch" style={{ background: 'var(--accent-soft)' }} />
           Middle 50%
         </span>
         {target != null && (
@@ -127,14 +127,14 @@ export function CurvesChart({ result, showTarget }: { result: PlannerResult; sho
                 </text>
               </g>
             ))}
-            <path d={band} fill="#b9cde8" opacity={0.7} />
+            <path d={band} fill="var(--accent-soft)" opacity={0.85} />
             {result.days.map((d) => (
-              <path key={d.date} d={stepPath(d.times)} fill="none" stroke="#9a9a9a" strokeWidth={1} opacity={0.75} />
+              <path key={d.date} d={stepPath(d.times)} fill="none" stroke="#bcb6ab" strokeWidth={1} opacity={0.75} />
             ))}
             <path d={line(curve.median)} fill="none" stroke="var(--seq-4)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
             {target != null && target >= x0 && target <= x1 && (
               <g>
-                <line x1={xOf(target)} x2={xOf(target)} y1={0} y2={ih} stroke="var(--red)" strokeWidth={2} />
+                <line x1={xOf(target)} x2={xOf(target)} y1={0} y2={ih} stroke="var(--red)" strokeWidth={1.5} strokeDasharray="4 3" />
                 <text x={xOf(target) + 4} y={10} style={{ fontWeight: 700 }}>
                   {clock(target)}
                 </text>

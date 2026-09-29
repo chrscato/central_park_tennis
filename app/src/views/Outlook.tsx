@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Group, Readout, useAsync } from '../components/common'
 import type { Manifest, Timing } from '../lib/data'
-import { clock, hourLabel, longDate, num, pct } from '../lib/format'
+import { clock, hourLabel, num, pct } from '../lib/format'
 import { fetchLiveRain, NWS_OBS_URL } from '../lib/live'
-import { combineTests, openingTest, outlook, type TodayAssumption } from '../lib/outlook'
+import { combineTests, openingTest, outlook, type OutlookWindow, type TodayAssumption } from '../lib/outlook'
 import { computePlanner } from '../lib/stats'
 import { href } from '../lib/url'
 import { BUCKET_LABEL, inches, type WeatherData } from '../lib/weather'
 
 const WEEKDAYS = [1, 2, 3, 4, 5]
 const SEASON = [4, 5, 6, 7, 8, 9, 10]
+const WINDOW_LABEL: Record<OutlookWindow, string> = { prev1: 'Yesterday', trail2: 'Last 2 days', trail3: 'Last 3 days' }
 const WINDOWS = [
   { label: '1–4 PM courts', hours: [13, 14, 15, 16], h: '13,14,15,16' },
   { label: '5–7 PM courts', hours: [17, 18, 19], h: '17,18,19' },
@@ -21,14 +22,17 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
   const [manual, setManual] = useState('')
   const [today, setToday] = useState<TodayAssumption>('dry')
 
-  const liveAmount = live.status === 'ready' ? (live.data.yesterday.total ?? live.data.yesterday.partialTotal) : null
+  const [win, setWin] = useState<OutlookWindow>('prev1')
+
+  const liveWin = live.status === 'ready' ? (win === 'prev1' ? live.data.yesterday : win === 'trail2' ? live.data.trail2 : live.data.trail3) : null
+  const liveAmount = liveWin ? (liveWin.total ?? liveWin.partialTotal) : null
   const manualAmount = manual.trim() === '' ? null : Number(manual)
-  const manualValid = manualAmount != null && Number.isFinite(manualAmount) && manualAmount >= 0 && manualAmount < 15
+  const manualValid = manualAmount != null && Number.isFinite(manualAmount) && manualAmount >= 0 && manualAmount < 30
   const amount = manualValid ? manualAmount : liveAmount
-  const trace = !manualValid && live.status === 'ready' ? live.data.yesterday.trace : false
+  const trace = !manualValid && liveWin ? liveWin.trace : false
 
   const available = weather.status === 'available'
-  const o = useMemo(() => (available && amount != null ? outlook(weather, amount, trace, today) : null), [available, weather, amount, trace, today])
+  const o = useMemo(() => (available && amount != null ? outlook(weather, amount, trace, today, win) : null), [available, weather, amount, trace, today, win])
 
   const walkup = useMemo(() => {
     if (!available) return []
@@ -48,8 +52,8 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
   return (
     <div className="split">
       <aside>
-        <Group title="Yesterday's rain">
-          {live.status === 'loading' && <p className="muted">Reading gauge…</p>}
+        <Group title="Rain at Central Park">
+          {live.status === 'loading' && <p className="muted small">Reading the gauge…</p>}
           {live.status === 'error' && (
             <div className="note err">
               NWS feed unavailable.{' '}
@@ -58,44 +62,40 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
               </button>
             </div>
           )}
+          <div className="checks" style={{ gridTemplateColumns: '1fr' }}>
+            {(['prev1', 'trail2', 'trail3'] as const).map((k) => {
+              const lw = live.status === 'ready' ? (k === 'prev1' ? live.data.yesterday : k === 'trail2' ? live.data.trail2 : live.data.trail3) : null
+              return (
+                <label key={k}>
+                  <input type="radio" name="win" checked={win === k} onChange={() => setWin(k)} />
+                  <span style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px' }}>
+                    <span>{WINDOW_LABEL[k]}</span>
+                    <b className="num">
+                      {lw ? inches(lw.partialTotal, lw.trace) : '—'}
+                      {lw && lw.total == null ? '*' : ''}
+                    </b>
+                  </span>
+                </label>
+              )
+            })}
+          </div>
           {live.status === 'ready' && (
-            <table className="kv" style={{ marginBottom: 6 }}>
-              <tbody>
-                <tr>
-                  <th>{longDate(live.data.yesterday.date)}</th>
-                  <td>
-                    <b>{inches(live.data.yesterday.partialTotal, live.data.yesterday.trace)}</b>
-                  </td>
-                </tr>
-                <tr>
-                  <th>Hourly reports</th>
-                  <td>
-                    {live.data.yesterday.hoursPresent}/24{live.data.yesterday.total == null && <span style={{ color: 'var(--red)' }}> (may be low)</span>}
-                  </td>
-                </tr>
-                <tr>
-                  <th>Today so far</th>
-                  <td>{inches(live.data.today.partialTotal, live.data.today.trace)}</td>
-                </tr>
-                <tr>
-                  <th>Last report</th>
-                  <td>
-                    {live.data.latestObservation
-                      ? new Date(live.data.latestObservation).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })
-                      : '—'}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div className="hint">
+              Today so far {inches(live.data.today.partialTotal, live.data.today.trace)} · last report{' '}
+              {live.data.latestObservation
+                ? new Date(live.data.latestObservation).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })
+                : '—'}
+              {liveWin && liveWin.total == null && ` · *${liveWin.hoursPresent} of ${liveWin.hoursExpected} hourly reports; may be low`}
+            </div>
           )}
-          <div className="field">
-            <label htmlFor="manual">Override (in)</label>
-            <input id="manual" type="number" step="0.01" min={0} max={15} value={manual} placeholder={liveAmount?.toFixed(2) ?? '0.00'} onChange={(e) => setManual(e.target.value)} />
+          <div className="field" style={{ marginTop: 10 }}>
+            <label htmlFor="manual">Or enter (in)</label>
+            <input id="manual" type="number" step="0.01" min={0} max={30} value={manual} placeholder={liveAmount?.toFixed(2) ?? '0.00'} onChange={(e) => setManual(e.target.value)} />
           </div>
           <div className="hint">
-            Source: {manualValid ? 'manual entry' : 'NWS KNYC (Central Park) live'} ·{' '}
+            {manualValid ? `Using your ${WINDOW_LABEL[win].toLowerCase()} figure.` : 'Live: NWS station KNYC.'}{' '}
             <a href={`${NWS_OBS_URL}/latest`} target="_blank" rel="noreferrer">
-              feed
+              Feed
             </a>
           </div>
         </Group>
@@ -114,7 +114,8 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
 
       <section>
         {o && (
-          <Group title={`Past days after ${BUCKET_LABEL[o.bucket]} rain${today === 'dry' ? ', then dry' : ''} (${num(o.dates.length)} days)`}>
+          <Group title={`After ${BUCKET_LABEL[o.bucket]} ${win === 'prev1' ? 'the day before' : `over the ${win === 'trail2' ? '2' : '3'} days before`}${today === 'dry' ? ', then a dry day' : ''}`}>
+            <div className="fig-sub">{num(o.dates.length)} comparable days in the records</div>
             {o.dates.length === 0 ? (
               <p>No comparable days.</p>
             ) : (
@@ -129,7 +130,7 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
                   <Readout label="Mornings rained out" value={pct(o.lateShare, 0)} sub={`${num(o.lateDates)} of ${num(o.knownOpeningDates)} days`} />
                   <Readout label="Sample" value={num(o.dates.length)} sub={o.dates.length < 10 ? 'Small — rough guide' : 'days'} />
                 </div>
-                <div className="grid-wrap tall sunken">
+                <div className="grid-wrap tall">
                   <table className="dg">
                     <thead>
                       <tr>
@@ -163,7 +164,7 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
         )}
 
         <Group title="When mornings are rained out, later courts go sooner (weekdays)">
-          <div className="grid-wrap sunken">
+          <div className="grid-wrap">
             <table className="dg">
               <thead>
                 <tr>

@@ -65,7 +65,7 @@ export function Methodology({ manifest: m }: { manifest: Manifest }) {
 
       <div className="cols-2">
         <Group title={`Walkup booking cohort (${m.cohort.version})`}>
-          <div className="grid-wrap sunken">
+          <div className="grid-wrap">
             <table className="dg">
               <thead><tr><th>Step</th><th className="n">Court-hours</th></tr></thead>
               <tbody>
@@ -81,7 +81,7 @@ export function Methodology({ manifest: m }: { manifest: Manifest }) {
           </div>
         </Group>
         <Group title="Checks against earlier analysis">
-          <div className="grid-wrap sunken">
+          <div className="grid-wrap">
             <table className="dg">
               <thead><tr><th>Figure</th><th className="n">Earlier</th><th className="n">Now</th><th>OK</th></tr></thead>
               <tbody>

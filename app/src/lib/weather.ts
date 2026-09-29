@@ -64,6 +64,7 @@ export interface WeatherData {
     prev6h_trace: boolean[]
     prev24h: (number | null)[]
     prev24h_trace: boolean[]
+    next6h?: (number | null)[]
   }
 }
 

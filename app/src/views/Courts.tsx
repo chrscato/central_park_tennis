@@ -100,7 +100,7 @@ export function Courts({ manifest, overview, weather, params }: { manifest: Mani
       {day.status === 'error' && <LoadError error={day.error} />}
       {grid && day.status === 'ready' && (
         <div className="split right">
-          <div className="grid-wrap tall sunken">
+          <div className="grid-wrap tall">
             <table className="court-grid" ref={gridRef} onKeyDown={onKey} aria-label={`Recorded slots on ${longDate(date)}; rows are start times, columns are courts`}>
               <thead>
                 <tr>

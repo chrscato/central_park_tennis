@@ -156,3 +156,11 @@ def test_ncei_falls_back_to_cache_when_offline(tmp_path, monkeypatch):
     assert meta["from_cache"] is True
     assert df["rain_in"].tolist() == [0.0, 0.28]
     assert df["trace"].tolist() == [True, False]
+
+
+def test_next6h_counts_only_rain_after_slot_start(tmp_path):
+    rows = [metar(f"2025-06-01 {h:02d}:51", f"{h + 4:02d}51", "P0020" if h in (10, 16) else "") for h in range(0, 20)]
+    grid = weather.hourly_grid(weather.load_iem_hourly(iem_file(tmp_path, rows)))
+    f = weather.slot_hour_features(grid, pd.DataFrame({"date": ["2025-06-01"], "hour": [10]}))
+    assert f["during_in"].iloc[0] == 0.2
+    assert f["next6h_in"].iloc[0] == 0.2  # the 16:51 obs only; the slot hour itself is excluded

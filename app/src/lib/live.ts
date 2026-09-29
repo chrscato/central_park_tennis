@@ -23,12 +23,36 @@ export interface LiveDay {
   hoursExpected: number
 }
 
+export interface LiveWindow {
+  total: number | null // null unless every hour of every day is present
+  partialTotal: number
+  trace: boolean
+  hoursPresent: number
+  hoursExpected: number
+}
+
 export interface LiveRain {
   fetchedAt: string
   latestObservation: string | null
   hours: LiveHour[]
   yesterday: LiveDay
+  /** The three full days before today, most recent first. */
+  priorDays: LiveDay[]
+  trail2: LiveWindow
+  trail3: LiveWindow
   today: LiveDay
+}
+
+export function combineDays(days: LiveDay[]): LiveWindow {
+  const partialTotal = Math.round(days.reduce((a, d) => a + d.partialTotal, 0) * 100) / 100
+  const complete = days.every((d) => d.total != null)
+  return {
+    total: complete ? partialTotal : null,
+    partialTotal,
+    trace: days.some((d) => d.trace),
+    hoursPresent: days.reduce((a, d) => a + d.hoursPresent, 0),
+    hoursExpected: days.reduce((a, d) => a + d.hoursExpected, 0),
+  }
 }
 
 const fmt = new Intl.DateTimeFormat('en-CA', {
@@ -96,21 +120,28 @@ export function summarizeDay(hours: LiveHour[], date: string, expected: number):
   }
 }
 
+export function shiftDate(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
+}
+
 export async function fetchLiveRain(now = new Date()): Promise<LiveRain> {
-  const start = new Date(now.getTime() - 60 * 3600 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')
+  const start = new Date(now.getTime() - 100 * 3600 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')
   const res = await fetch(`${NWS_OBS_URL}?start=${encodeURIComponent(start)}`, { headers: { Accept: 'application/geo+json' } })
   if (!res.ok) throw new Error(`NWS API HTTP ${res.status}`)
   const body = (await res.json()) as { features: NwsFeature[] }
   const hours = parseObservations(body.features ?? [])
   const today = toLocal(now)
-  const y = new Date(now.getTime() - 24 * 3600 * 1000)
-  const yesterday = toLocal(y).date
+  const priorDays = [1, 2, 3].map((k) => summarizeDay(hours, shiftDate(today.date, -k), 24))
   const latest = body.features?.length ? body.features.map((f) => f.properties.timestamp).sort().at(-1)! : null
   return {
     fetchedAt: now.toISOString(),
     latestObservation: latest,
     hours,
-    yesterday: summarizeDay(hours, yesterday, 24),
+    yesterday: priorDays[0],
+    priorDays,
+    trail2: combineDays(priorDays.slice(0, 2)),
+    trail3: combineDays(priorDays),
     // Hours completed so far today: observations end at :51, so hour H is done after H:51.
     today: summarizeDay(hours, today.date, today.minute >= 51 ? today.hour + 1 : today.hour),
   }

@@ -107,12 +107,25 @@ describe('computePlanner', () => {
   })
 })
 
+describe('latest bookings', () => {
+  it('reports each day’s last and 5th-from-last booking, weighting days equally', () => {
+    const d1: [string, number, number][] = [400, 410, 420, 430, 440, 450].map((m) => ['2025-04-02', 18, m])
+    const d2: [string, number, number][] = [500, 900].map((m) => ['2025-04-09', 18, m])
+    const r = computePlanner(fixture([...d1, ...d2]), APR_WED, OPTS)
+    expect(r.days[0].last).toBe(450)
+    expect(r.days[0].lastFive).toEqual([410, 420, 430, 440, 450])
+    expect(r.days[1].lastFive).toEqual([500, 900])
+    expect(r.latest.last.p50).toBe(675) // median of 450 and 900
+    expect(r.latest.fifthLast).toEqual({ p50: 410, n: 1 }) // only day 1 has 5+ bookings
+  })
+})
+
 describe('dailyCurveBand', () => {
   it('each curve runs from 0 to 1 and the median is monotone', () => {
     const band = dailyCurveBand(
       [
-        { date: 'a', times: [400, 410, 500], p25: 0, p50: 0 },
-        { date: 'b', times: [420], p25: 0, p50: 0 },
+        { date: 'a', times: [400, 410, 500], p25: 0, p50: 0, last: 500, lastFive: [] },
+        { date: 'b', times: [420], p25: 0, p50: 0, last: 420, lastFive: [] },
       ],
       5,
     )

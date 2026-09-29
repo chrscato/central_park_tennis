@@ -59,6 +59,22 @@ NOAA's NCEI Access Data Service is **not** used live: its daily summaries lag re
 
 Small samples (for example 19 dry days after 0.50"+ of rain) are shown with their counts.
 
+## Latest bookings
+
+For each date in the filter: the day's **last** qualifying walkup booking and its **final five** booking times. Summaries weight each date once: median (and IQR) of the daily last booking, and the median of each day's 5th-from-last booking (days with 5+ bookings only). These show how late courts were still being booked, not when courts ran out, because the export has no inventory of unbooked courts.
+
+## Anomalies
+
+- **Rained out with little rain:** rained-out court-hours where the Central Park gauge recorded under 0.05" in the 24 hours before plus the hour of the slot (adjustable). Dates are listed if they have 10+ such court-hours. Each is labelled:
+  - *rain came later* if 0.05"+ fell in the 6 hours after the slot started (a closure ahead of rain), else
+  - *wet from earlier days* if the 3 days before totalled 0.25"+, else
+  - *no rain nearby*.
+- Court-hours with gaps in the hourly rain data are counted separately and not judged.
+- **Split decisions:** hours where some courts were recorded rained out while others were checked in.
+- **Check-ins during rain:** court-hours recorded checked in during an hour with 0.05"+ of rain.
+
+These are leads, not findings: one gauge can miss local showers, and surfaces drain at different rates.
+
 ## Rules applied everywhere
 
 - Court-hours = distinct validated slot IDs; a CSV row is not a booking, player, or court-hour.

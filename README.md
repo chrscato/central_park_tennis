@@ -44,13 +44,21 @@ Input paths, the historical cutoff, timezone, and weather units are set in `conf
 
 ## What's in the draft
 
-The UI is a classic desktop-application layout (Win2000-era chrome: title bar, tabs, group boxes, sunken data grids, status bar). Tabs:
+Lean editorial UI: serif section heads, key-figure rows, charts with title / subtitle / source line, and tables with horizontal rules only. Tabs:
 
-- **Booking Times** (default): query pane (month, day, court start time, season, rain before, late-opening mornings) → readouts, daily booking curves, bookings-per-15-min histogram, benchmark + alarm calculator, and a per-date grid. The benchmark is suppressed below 10 dates. Filters are encoded in the URL (travel times only if opted in).
-- **Rain Outlook**: pulls yesterday's and today's rainfall live from the NWS feed for the Central Park gauge (or takes a manual value). For comparable past days, it shows the recorded rained-out share by start hour, when recorded play resumed, and how often mornings were washed out. It also shows how much earlier afternoon/evening walkups were booked on late-opening days (e.g. 1–4 p.m. slots: ~72 min earlier on weekdays).
-- **Court Records**: per-date grid with start times down the side and courts 1–26 across with text status codes, an hourly rainfall strip, same-day/previous-day/2-/3-day rainfall, hatched "not in export" cells, keyboard navigation, and sanitized slot details.
-- **Weather**: rained-out share by rainfall bucket for the same day, previous day, 2 and 3 days before, and during / 3h / 6h / 24h before the slot. Also a daily rain vs. rain-out timeline, rain-outs on measured-dry days (as leads, not findings), and source checks.
-- **Methodology**: checksums, cutoff and timezone assumptions, reconciliation with earlier figures, exclusion ledgers, downloads, what the records cannot answer, records still needed, and a change log.
+- **Booking times** (default): filters for month, day, court start time, season, rain before, and late-opening mornings. Shows:
+  - when courts were booked (25/50/75%, typical day)
+  - how late courts were still being booked (the typical day's last booking and when its final five began)
+  - two charts: daily booking curves and bookings per 15 minutes
+  - arrive-by benchmark (suppressed below 10 dates) and alarm calculator
+  - every date with its last five booking times
+
+  Filters are encoded in the URL; travel times are included only if you opt in.
+- **Rain outlook**: live Central Park rain from the NWS feed for yesterday, the last 2 days, or the last 3 days (or a manual value). For comparable past days, it shows the rained-out share by start hour, when recorded play resumed, and how often mornings washed out. It also shows how much earlier afternoon and evening walkups go on late-opening days.
+- **Court records**: per-date grid with start times down the side and courts 1–26 across, plus a rain column, day and 1-/2-/3-day rain, and sanitized slot details.
+- **Rain vs. closures**: small multiples of rained-out share by rainfall for the same day, the day before, 2- and 3-day totals, and 0/3/6/24 hours before the slot. Also a combined table, a daily timeline, and sources.
+- **Anomalies**: rain-outs with little rain in the 24 hours before, sorted into "no rain nearby", "rain came later" (closed ahead of rain), or "wet from earlier days"; thresholds are adjustable. Also a scatter of every date, and "split decisions" (some courts rained out while others were checked in the same hour).
+- **Methodology**: checksums, assumptions, reconciliation, ledgers, downloads, limits, records still needed.
 
 ## Verified against earlier analysis
 

@@ -1,4 +1,4 @@
-import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Component, useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
 import { STATUS_LABEL, STATUSES, type Status } from '../lib/data'
 
 export type Async<T> = { status: 'loading' } | { status: 'error'; error: string } | { status: 'ready'; data: T }
@@ -20,17 +20,18 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): Async<T> {
   return state
 }
 
-export function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
-  const ref = useRef<T>(null)
+/** Width of an element, tracked across resizes and re-attached if the element changes. */
+export function useWidth<T extends HTMLElement>(): [(el: T | null) => void, number] {
+  const [el, setEl] = useState<T | null>(null)
   const [w, setW] = useState(0)
   useLayoutEffect(() => {
-    if (!ref.current) return
+    if (!el) return
     const ro = new ResizeObserver(([e]) => setW(Math.floor(e.contentRect.width)))
-    ro.observe(ref.current)
-    setW(ref.current.clientWidth)
+    ro.observe(el)
+    setW(el.clientWidth)
     return () => ro.disconnect()
-  }, [])
-  return [ref, w]
+  }, [el])
+  return [setEl, w]
 }
 
 export const statusColor = (s: Status) => `var(--st-${s})`
@@ -62,16 +63,28 @@ export function StatusLegend({ includeMissing = false }: { includeMissing?: bool
 
 export function Group({ title, children, className }: { title: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <fieldset className={`group${className ? ' ' + className : ''}`}>
-      <legend>{title}</legend>
+    <section className={`grp${className ? ' ' + className : ''}`}>
+      <h3>{title}</h3>
       {children}
-    </fieldset>
+    </section>
+  )
+}
+
+/** Chart/table with title, one-line subtitle (units, filter) and source line. */
+export function Figure({ title, sub, source, children }: { title: ReactNode; sub?: ReactNode; source?: ReactNode; children: ReactNode }) {
+  return (
+    <figure style={{ margin: 0 }}>
+      <div className="fig-title">{title}</div>
+      {sub && <div className="fig-sub">{sub}</div>}
+      {children}
+      {source && <figcaption className="fig-source">{source}</figcaption>}
+    </figure>
   )
 }
 
 export function Readout({ label, value, sub, accent, off }: { label: string; value: ReactNode; sub?: ReactNode; accent?: boolean; off?: boolean }) {
   return (
-    <div className={`readout sunken${off ? ' off' : ''}`}>
+    <div className={`readout${off ? ' off' : ''}`}>
       <div className="k">{label}</div>
       <div className={`v${accent ? ' accent' : ''}`}>{value}</div>
       {sub != null && <div className="s">{sub}</div>}

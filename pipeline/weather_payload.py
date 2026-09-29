@@ -180,6 +180,7 @@ def build(
             "prev6h_trace": col(feats["prev6h_trace"]),
             "prev24h": col(feats["prev24h_in"]),
             "prev24h_trace": col(feats["prev24h_trace"]),
+            "next6h": col(feats["next6h_in"]),
         },
     }
     return payload, by_date

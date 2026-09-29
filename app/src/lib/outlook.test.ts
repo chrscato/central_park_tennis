@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { parseMetarPrecip, parseObservations, summarizeDay, toLocal } from './live'
+import { combineDays, parseMetarPrecip, parseObservations, shiftDate, summarizeDay, toLocal } from './live'
 import { combineTests, outlook } from './outlook'
 import type { WeatherData } from './weather'
 
@@ -45,6 +45,18 @@ describe('live METAR parsing (same rules as the pipeline)', () => {
   })
 })
 
+describe('trailing live windows', () => {
+  it('sums days and is complete only if every day is', () => {
+    const full = (date: string, rain: number) => summarizeDay(Array.from({ length: 24 }, (_, h) => ({ date, hour: h, rain: h === 0 ? rain : 0, trace: false })), date, 24)
+    const a = full('2026-09-28', 0.3)
+    const b = full('2026-09-27', 0.2)
+    const partial = { ...full('2026-09-26', 0.1), total: null, hoursPresent: 20 }
+    expect(combineDays([a, b])).toMatchObject({ total: 0.5, hoursPresent: 48 })
+    expect(combineDays([a, b, partial])).toMatchObject({ total: null, partialTotal: 0.6 })
+    expect(shiftDate('2026-03-01', -1)).toBe('2026-02-28')
+  })
+})
+
 describe('combineTests', () => {
   it('any "no" wins, then "unknown"', () => {
     const ok = () => 'ok' as const
@@ -70,6 +82,11 @@ describe.skipIf(!has)('outlook on generated data', () => {
     const h8 = o.hours.find((h) => h.hour === 8)!
     const h18 = o.hours.find((h) => h.hour === 18)!
     expect(h8.share!).toBeGreaterThan(h18.share!)
+  })
+  it('trailing 3-day window selects on the 3 days before', () => {
+    const o = outlook(w, 1.5, false, 'dry', 'trail3')
+    expect(o.window).toBe('trail3')
+    expect(o.dates.length).toBeGreaterThan(0)
   })
   it('dry day after a dry day: courts open at 7 a.m.', () => {
     const o = outlook(w, 0, false, 'dry')
