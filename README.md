@@ -44,7 +44,7 @@ Input paths, the historical cutoff, timezone, and weather units are set in `conf
 
 ## What's in the site
 
-Tabs, in plain language:
+Look: parks-green palette (inspired by public park signage) with an original tennis-ball mark; no official logos, seals or NYC.gov chrome. Tabs, in plain language:
 
 - **When to go** (home): pick court time, day and month. You get a one-sentence answer (half taken by…, three in four by…, last one typically at…), a "be in line by" time with an alarm calculator, and two charts: how fast each day's courts went, and when bookings were made. Counts **walk-up bookings only**, on **walk-up courts** by default: courts 19–24 are mostly booked online and left out unless you choose All. More filters (season, rain before, mornings closed by rain) and every day's detail are tucked away.
 - **After rain**: live Central Park rain for yesterday or the last 2–3 days (NWS), or a number you enter. It shows how past days like it went: when courts came back, how often mornings were closed, and how much sooner afternoon and evening walk-ups went.
