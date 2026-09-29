@@ -53,9 +53,10 @@ export interface PlannerFilter {
   years: number[] // empty = all years
   hours: number[] // slot start hours (24h)
   courts?: 'walkup' | 'all' // 'walkup' = courts mostly booked in person (default in the UI); omitted = all
+  holidays?: boolean // include public holidays (default: excluded, they behave like weekends)
 }
 
-export const DEFAULT_FILTER: PlannerFilter = { months: [4], weekdays: [3], years: [], hours: [17, 18], courts: 'walkup' }
+export const DEFAULT_FILTER: PlannerFilter = { months: [4], weekdays: [3], years: [], hours: [17, 18], courts: 'walkup', holidays: false }
 
 export interface DaySeries {
   date: string
@@ -73,6 +74,8 @@ export interface PlannerResult {
   dayWeighted: { p25: number | null; p50: number | null; p75: number | null } // of daily medians
   /** Across days (each day once): the day's last booking, and the day's 5th-from-last booking (days with 5+ bookings). */
   latest: { last: { p25: number | null; p50: number | null; p75: number | null }; fifthLast: { p50: number | null; n: number } }
+  /** Court-hours taken, freed by a cancellation/no-show, and taken again (with the re-take time). */
+  freed: { count: number; retakeMedian: number | null }
   zeroQualifyingDates: string[] // recorded slots in window but no qualifying entry
   noRecordDates: string[] // matching calendar dates with no recorded slots in window
   weatherExcludedDates: number // calendar-matching dates with records that fail the weather condition
@@ -102,7 +105,8 @@ function metas(t: Timing): DateMeta[] {
   return m
 }
 
-export function matchesDate(meta: DateMeta, f: PlannerFilter): boolean {
+export function matchesDate(meta: DateMeta, f: PlannerFilter, holidays?: Set<string>): boolean {
+  if (holidays && f.holidays === false && holidays.has(meta.date)) return false
   return (
     f.months.includes(meta.month) &&
     f.weekdays.includes(meta.dow) &&
@@ -113,7 +117,8 @@ export function matchesDate(meta: DateMeta, f: PlannerFilter): boolean {
 export function computePlanner(t: Timing, f: PlannerFilter, opts: PlannerOptions): PlannerResult {
   const meta = metas(t)
   const hourSet = new Set(f.hours)
-  const calendarOk = meta.map((m) => matchesDate(m, f))
+  const holidaySet = new Set(t.holidays ?? [])
+  const calendarOk = meta.map((m) => matchesDate(m, f, holidaySet))
   const wx = meta.map((m, i) => (calendarOk[i] && opts.weather ? opts.weather(m.date) : 'ok'))
   const dateOk = calendarOk.map((ok, i) => ok && wx[i] === 'ok')
 
@@ -121,11 +126,14 @@ export function computePlanner(t: Timing, f: PlannerFilter, opts: PlannerOptions
   const walkupCourts = new Set(t.court_groups?.walkup ?? [])
   const perDate = new Map<number, number[]>()
   const pooledTimes: number[] = []
+  const retakes: number[] = []
   const { d, h, m, c } = t.slots
+  const rt = t.slots.r
   for (let k = 0; k < d.length; k++) {
     if (!dateOk[d[k]] || !hourSet.has(h[k])) continue
     if (walkupOnly && !walkupCourts.has(c[k])) continue
     pooledTimes.push(m[k])
+    if (rt && rt[k] != null) retakes.push(rt[k]!)
     let arr = perDate.get(d[k])
     if (!arr) perDate.set(d[k], (arr = []))
     arr.push(m[k])
@@ -168,7 +176,7 @@ export function computePlanner(t: Timing, f: PlannerFilter, opts: PlannerOptions
   const index = new Map(t.dates.map((x, i) => [x, i]))
   if (f.hours.length) {
     for (let day = opts.firstDate; day < opts.cutoff; day = addDays(day, 1)) {
-      if (!matchesDate(dateMeta(day), f)) continue
+      if (!matchesDate(dateMeta(day), f, holidaySet)) continue
       const i = index.get(day)
       if (i !== undefined && (weatherExcluded.has(i) || weatherUnknown.has(i))) continue
       if (i === undefined || !recordedByDate.get(i)) noRecordDates.push(day)
@@ -202,6 +210,7 @@ export function computePlanner(t: Timing, f: PlannerFilter, opts: PlannerOptions
     days,
     dayWeighted,
     latest,
+    freed: { count: retakes.length, retakeMedian: quantile(retakes.sort((a, b) => a - b), 0.5) },
     zeroQualifyingDates,
     noRecordDates,
     weatherExcludedDates: weatherExcluded.size,

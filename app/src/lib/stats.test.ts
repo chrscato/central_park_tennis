@@ -107,6 +107,21 @@ describe('computePlanner', () => {
   })
 })
 
+describe('holidays and freed courts', () => {
+  it('excludes holidays unless asked, and counts freed-then-retaken court-hours', () => {
+    const t = fixture([['2025-04-02', 18, 400], ['2025-04-09', 18, 420], ['2025-04-16', 18, 440]])
+    t.holidays = ['2025-04-09']
+    t.slots.r = [null, 900, null]
+    const off = computePlanner(t, { ...APR_WED, holidays: false }, OPTS)
+    const on = computePlanner(t, { ...APR_WED, holidays: true }, OPTS)
+    expect(off.days.map((d) => d.date)).toEqual(['2025-04-02', '2025-04-16'])
+    expect(off.noRecordDates).not.toContain('2025-04-09') // excluded, not "missing"
+    expect(on.days).toHaveLength(3)
+    expect(on.freed).toEqual({ count: 1, retakeMedian: 900 })
+    expect(off.freed.count).toBe(0)
+  })
+})
+
 describe('court groups', () => {
   it('walk-up courts only drops bookings on online courts and their records', () => {
     const t = fixture([['2025-04-02', 18, 400], ['2025-04-02', 18, 500], ['2025-04-09', 18, 450]])

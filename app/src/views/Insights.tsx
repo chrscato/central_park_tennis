@@ -1,11 +1,46 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Figure, Group, Readout } from '../components/common'
 import { PartnerHistogram, SimpleBars } from '../components/moreCharts'
-import type { Insights as InsightsData, Manifest } from '../lib/data'
-import { hourLabel, num, pct } from '../lib/format'
+import type { Insights as InsightsData, Manifest, Timing } from '../lib/data'
+import { clock, hourLabel, num, pct } from '../lib/format'
+import { dateMeta, quantile } from '../lib/stats'
 
-export function Insights({ manifest, insights }: { manifest: Manifest; insights: InsightsData }) {
+/** Weekday (non-holiday) 5–7 PM court-hours on walk-up courts: how many were first taken at 9 AM or later. */
+function eveningLeftovers(t: Timing) {
+  const wc = new Set(t.court_groups?.walkup ?? [])
+  const hol = new Set(t.holidays ?? [])
+  const meta = t.dates.map(dateMeta)
+  const byCourt = new Map<number, { n: number; late: number }>()
+  const byHour = new Map<number, { n: number; late: number }>()
+  const retakes: number[] = []
+  let n = 0
+  let freed = 0
+  const { d, h, m, c, r } = t.slots
+  for (let k = 0; k < d.length; k++) {
+    const md = meta[d[k]]
+    if (!wc.has(c[k]) || hol.has(md.date) || md.dow === 0 || md.dow === 6 || h[k] < 17 || h[k] > 19) continue
+    const late = m[k] >= 540 ? 1 : 0
+    n++
+    const bc = byCourt.get(c[k]) ?? { n: 0, late: 0 }
+    bc.n++
+    bc.late += late
+    byCourt.set(c[k], bc)
+    const bh = byHour.get(h[k]) ?? { n: 0, late: 0 }
+    bh.n++
+    bh.late += late
+    byHour.set(h[k], bh)
+    if (r && r[k] != null) {
+      freed++
+      retakes.push(r[k]!)
+    }
+  }
+  retakes.sort((a, b) => a - b)
+  return { n, byCourt, byHour, freed, retakeMedian: quantile(retakes, 0.5) }
+}
+
+export function Insights({ manifest, insights, timing }: { manifest: Manifest; insights: InsightsData; timing: Timing }) {
   const [role, setRole] = useState<'second' | 'fourth'>('second')
+  const ev = useMemo(() => eveningLeftovers(timing), [timing])
   const ps = insights.party_size
   const th = insights.two_hour
   const pe = insights.partner_entry
@@ -18,8 +53,32 @@ export function Insights({ manifest, insights }: { manifest: Manifest; insights:
   const topStart = Object.entries(th.likely_by_start_hour).sort((a, b) => b[1] - a[1])[0]
   const st = pe[role]
 
+  const courts = [...ev.byCourt.entries()].map(([c, v]) => ({ c, share: v.late / v.n, n: v.n })).sort((a, b) => b.share - a.share)
+  const hourShare = (h: number) => {
+    const v = ev.byHour.get(h)
+    return v ? v.late / v.n : null
+  }
+
   return (
     <>
+      <Group title="Evening courts still open after 9 AM">
+        <div className="readouts">
+          <Readout label="6 PM courts gone by 9 AM" value={pct(hourShare(18) == null ? null : 1 - hourShare(18)!, 0)} accent sub="weekdays, walk-up courts" />
+          <Readout label="5 PM courts gone by 9 AM" value={pct(hourShare(17) == null ? null : 1 - hourShare(17)!, 0)} sub="5 PM is less in demand" />
+          <Readout label="7 PM courts gone by 9 AM" value={pct(hourShare(19) == null ? null : 1 - hourShare(19)!, 0)} />
+          <Readout label="Freed up and re-taken" value={pct(ev.freed / Math.max(1, ev.n), 1)} sub={`cancellations & no-shows, usually re-taken ~${clock(ev.retakeMedian)}`} />
+        </div>
+        <div style={{ marginTop: 14, maxWidth: 620 }}>
+          <Figure
+            title={`Courts ${courts.slice(0, 3).map((x) => x.c).join(', ')} are most often still open after 9 AM`}
+            sub="Share of weekday 5–7 PM court-hours first taken at 9 AM or later, by court"
+            source="Holidays and data-quality exclusions left out. A court counts as taken at its first walk-up booking, even if that group later cancelled."
+          >
+            <SimpleBars items={courts.map((x) => ({ label: `Court ${x.c}`, value: x.share, display: pct(x.share, 0) }))} />
+          </Figure>
+        </div>
+      </Group>
+
       <Group title="Singles or doubles?">
         <div className="readouts">
           <Readout label="Singles (2 players)" value={pct((c.singles ?? 0) / total, 0)} accent sub={`${num(c.singles ?? 0)} court-hours`} />

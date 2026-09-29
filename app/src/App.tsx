@@ -87,7 +87,7 @@ export default function App() {
                 case 'weather':
                   return <Weather manifest={manifest} overview={ov} weather={w} />
                 case 'insights':
-                  return <Insights manifest={manifest} insights={ins} />
+                  return <Insights manifest={manifest} insights={ins} timing={t} />
                 case 'methodology':
                   return <Methodology manifest={manifest} />
                 default:

@@ -20,6 +20,19 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): Async<T> {
   return state
 }
 
+/** True while the media query matches (e.g. phone-sized screens). */
+export function useMediaQuery(query: string): boolean {
+  const [match, setMatch] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(query)
+    const on = () => setMatch(mq.matches)
+    on()
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [query])
+  return match
+}
+
 /** Width of an element, tracked across resizes and re-attached if the element changes. */
 export function useWidth<T extends HTMLElement>(): [(el: T | null) => void, number] {
   const [el, setEl] = useState<T | null>(null)

@@ -59,6 +59,22 @@ NOAA's NCEI Access Data Service is **not** used live: its daily summaries lag re
 
 Small samples (for example 19 dry days after 0.50"+ of rain) are shown with their counts.
 
+## When a court counts as "taken" and data cleaning (quality-v1)
+
+The app counts a court-hour as taken at its **first same-day walk-up booking**, even if that party later cancelled or didn't show. The court was gone from that moment. Court-hours that were freed and taken again are counted separately, with the re-take time (2,007 court-hours). The unscreened cohort `successful-walkup-v1` (earliest *checked-in* walk-up entry) is kept only to reconcile with earlier analysis.
+
+Removed before the app uses the data (counts in `manifest.json → cohort.quality_ledger`, shown on About the data):
+
+| Rule | Removed | Why |
+| --- | ---: | --- |
+| Walk-up entered before 6:20 AM | 162 court-hours | The desk opens at about 6:30 AM (the median day's first walk-up); earlier entries are scattered pre-entries, not walk-ups. |
+| Days with under 10 recorded court-hours | 4 days | Fragments (e.g. the first days of the export) would count as full days. |
+| Dry days with no walk-up before 9 AM | 5 days, 357 court-hours | No morning desk activity although mornings weren't rained out: likely a system or event day. |
+| Public holidays | excluded from weekday results by default | Holiday demand looks like a weekend (e.g. July 4, Labor Day evenings go late). |
+| Partner records more than 4 h early or over 1 h after start | 203 records | Dropped from check-in figures only. |
+
+All thresholds are in `config/pipeline.toml` (`[quality]`, `[calendar]`).
+
 ## Walk-up vs online courts
 
 Courts are grouped from the data: a slot counts as online if its first player (not a 2nd/3rd/4th player) booked online. Courts where at least half of slots are online are **online courts** (currently 19–24, about 93% online); the rest are **walk-up courts** (1–18 at 0%, 25–26 at 10–12%). Booking times use walk-up bookings only (method `walkup`) and, by default, walk-up courts only. Choosing "All" adds the roughly 1,300 walk-up bookings made on online courts, which are likely leftover slots taken on the day.

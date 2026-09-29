@@ -87,7 +87,7 @@ def two_hour_bookings(norm: pd.DataFrame, slots: pd.DataFrame, cutoff: str, tol_
     }
 
 
-def partner_entry(norm: pd.DataFrame, slots: pd.DataFrame, cutoff: str, walkup_courts: list[int]) -> dict:
+def partner_entry(norm: pd.DataFrame, slots: pd.DataFrame, cutoff: str, walkup_courts: list[int], window: tuple[int, int] = (-60, 240)) -> dict:
     """When the 2nd (singles) and 4th (doubles) player records were entered, in minutes
     before the slot start, for checked-in walk-up bookings on walk-up courts.
     Entry time of the record — not a verified arrival or check-in time."""
@@ -98,11 +98,16 @@ def partner_entry(norm: pd.DataFrame, slots: pd.DataFrame, cutoff: str, walkup_c
     rows = rows.merge(ci[["slot_id", "res_local"]].rename(columns={"res_local": "slot_start"}), on="slot_id")
     rows = rows.sort_values("created_local").drop_duplicates(["slot_id", "method_n"])
     mins = (rows["slot_start"] - rows["created_local"]).dt.total_seconds() / 60
+    lo, hi = window
+    implausible = (mins < lo) | (mins > hi)
     out: dict = {
         "unit": "minutes before slot start that the partner's record was entered",
         "bins": PARTNER_BINS,
         "rule_minutes": 15,
+        "window": [lo, hi],
+        "removed_implausible": {r: int((implausible & (rows["method_n"] == r)).sum()) for r in ("second", "fourth")},
     }
+    rows, mins = rows[~implausible], mins[~implausible]
     for role in ("second", "fourth"):
         m = mins[rows["method_n"] == role].dropna()
         edges = [-np.inf] + PARTNER_BINS + [np.inf]

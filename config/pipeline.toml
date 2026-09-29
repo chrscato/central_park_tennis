@@ -23,6 +23,27 @@ timezone = "America/New_York"
 walkup_cohort_version = "successful-walkup-v1"
 min_dates_for_planning_target = 10
 
+[quality]
+# Screen applied to the walk-up cohort before it reaches the app (see pipeline/quality.py).
+# The walk-up desk normally starts entering bookings at this time (observed in the data).
+desk_open = "06:30"
+grace_minutes = 10
+# Dates with fewer recorded court-hours are fragments, not representative days.
+min_day_court_hours = 10
+# Partner records entered outside this window (minutes before start; negative = after) are dropped
+# from the check-in statistics as implausible.
+partner_window_minutes = [-60, 240]
+# Dry days whose first walk-up entry is at or after this hour are treated as system/event days.
+quiet_morning_before_hour = 9
+
+[calendar]
+# Public holidays inside the tennis season (federal, as observed). Excluded from weekday
+# results by default in the app, because holiday demand looks like a weekend.
+holidays = [
+  "2025-05-26", "2025-06-19", "2025-07-04", "2025-09-01", "2025-10-13",
+  "2026-05-25", "2026-06-19", "2026-07-03", "2026-09-07", "2026-10-12",
+]
+
 [weather]
 # NOAA LCD exports for USW00094728 (Central Park). Glob; byte-identical duplicates are skipped.
 lcd_glob = "data/nyc_weather/LCD_USW00094728_*.csv"

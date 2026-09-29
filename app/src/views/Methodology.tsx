@@ -106,6 +106,45 @@ export function Methodology({ manifest: m }: { manifest: Manifest }) {
         </Group>
       </div>
 
+      {m.cohort.quality_ledger && (
+        <Group title="Data cleaning">
+          <div className="fig-sub">
+            Booking times use {num(m.cohort.screened_slots ?? 0)} court-hours after removing records that can’t be right for the question. Time counted:{' '}
+            {m.cohort.time_definition}. {num(m.cohort.freed_then_retaken ?? 0)} court-hours were freed by a cancellation or no-show and taken again.
+          </div>
+          <div className="grid-wrap">
+            <table className="dg">
+              <thead>
+                <tr>
+                  <th>Removed</th>
+                  <th className="n">Court-hours</th>
+                  <th>Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                {m.cohort.quality_ledger.map((q) => (
+                  <tr key={q.rule}>
+                    <td>{q.rule}</td>
+                    <td className="n">{num(q.removed)}</td>
+                    <td className="wrap small">{q.why}</td>
+                  </tr>
+                ))}
+                <tr>
+                  <td>Public holidays</td>
+                  <td className="n">—</td>
+                  <td className="wrap small">Left out of weekday results by default (holiday demand looks like a weekend); switch on under More filters.</td>
+                </tr>
+                <tr>
+                  <td>Partner records far from the court time</td>
+                  <td className="n">—</td>
+                  <td className="wrap small">Entered more than 4 hours early or over an hour after start; dropped from the check-in figures only.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Group>
+      )}
+
       <div className="cols-2">
         <Group title="Cannot be answered from these records">
           <ul style={{ margin: 0, paddingLeft: 18 }}>{CANNOT_ANSWER.map((t) => <li key={t}>{t}</li>)}</ul>

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CurvesChart, TimeHistogram } from '../components/charts'
-import { Figure, Group, Readout } from '../components/common'
+import { Figure, Group, Readout, useMediaQuery } from '../components/common'
 import type { Manifest, Timing } from '../lib/data'
 import { clock, hourLabel, inList, longDate, MONTHS, MONTHS_LONG, num, ranges, WEEKDAYS, WEEKDAYS_LONG } from '../lib/format'
 import { combineTests, OPENING_FILTER, openingTest, type OpeningFilter } from '../lib/outlook'
-import { alarmMinute, computePlanner, DEFAULT_FILTER, type PlannerFilter } from '../lib/stats'
+import { alarmMinute, computePlanner, dateMeta, DEFAULT_FILTER, type PlannerFilter } from '../lib/stats'
+import { toLocal } from '../lib/live'
 import { href, parseIntList, replaceParams } from '../lib/url'
 import { PLANNER_WEATHER, plannerWeatherTest, type PlannerWeather, type WeatherData } from '../lib/weather'
 
@@ -34,6 +35,7 @@ function readState(params: URLSearchParams, years: number[]) {
     years: params.get('y') === 'all' || !params.has('y') ? [] : pick('y', Math.min(...years), Math.max(...years), [], 'season'),
     hours: pick('h', 0, 23, DEFAULT_FILTER.hours, 'start time'),
     courts: params.get('c') === 'all' ? 'all' : 'walkup',
+    holidays: params.get('hol') === '1',
   }
   const n = (key: string, fallback: number) => {
     const raw = params.get(key)
@@ -66,6 +68,7 @@ function toParams(f: PlannerFilter, bench: boolean, p: Personal, wx: PlannerWeat
   q.set('y', f.years.length ? f.years.join(',') : 'all')
   q.set('h', f.hours.join(','))
   if (f.courts === 'all') q.set('c', 'all')
+  if (f.holidays) q.set('hol', '1')
   if (wx !== 'any') q.set('wx', wx)
   if (open !== 'any') q.set('open', open)
   if (!bench) q.set('bench', '0')
@@ -93,6 +96,25 @@ function Checks({ options, selected, onChange, label, cols }: { options: number[
   )
 }
 
+/** Tomorrow in New York, mapped onto the season covered by the records. */
+function tomorrowInNY(holidays: string[]) {
+  const date = toLocal(new Date(Date.now() + 24 * 3600 * 1000)).date
+  const meta = dateMeta(date)
+  const month = meta.month < 4 ? 4 : meta.month > 10 ? 10 : meta.month
+  return { date, dow: meta.dow, month, inSeason: month === meta.month, holiday: holidays.includes(date) || isLikelyHoliday(date) }
+}
+
+/** Fixed-date and Monday holidays in the tennis season (covers years beyond the records). */
+function isLikelyHoliday(date: string): boolean {
+  const { month, dow } = dateMeta(date)
+  const day = Number(date.slice(8, 10))
+  if (date.endsWith('-06-19') || date.endsWith('-07-04')) return true
+  if (dow === 1 && month === 5 && day > 24) return true // Memorial Day
+  if (dow === 1 && month === 9 && day <= 7) return true // Labor Day
+  if (dow === 1 && month === 10 && day >= 8 && day <= 14) return true // Columbus / Indigenous Peoples' Day
+  return false
+}
+
 /** "Wednesdays in April" / "Weekdays in April, May" */
 function describe(f: PlannerFilter): string {
   const wd = f.weekdays
@@ -118,6 +140,22 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
   const [wx, setWx] = useState<PlannerWeather>(wxAvailable ? initial.wx : 'any')
   const [open, setOpen] = useState<OpeningFilter>(wxAvailable ? initial.open : 'any')
   const [copied, setCopied] = useState(false)
+  const [drawer, setDrawer] = useState(false)
+  const [tomorrowNote, setTomorrowNote] = useState<string | null>(null)
+  const isMobile = useMediaQuery('(max-width: 900px)')
+  const tomorrow = useMemo(() => tomorrowInNY(timing.holidays ?? []), [timing])
+  const applyTomorrow = () => {
+    setFilter({ ...filter, weekdays: [tomorrow.dow], months: [tomorrow.month], holidays: tomorrow.holiday })
+    setTomorrowNote(
+      tomorrow.inSeason
+        ? tomorrow.holiday
+          ? 'Tomorrow is a public holiday, so holidays are included.'
+          : null
+        : `Tomorrow is outside the April–October season in these records; showing ${MONTHS_LONG[tomorrow.month - 1]} instead.`,
+    )
+    setDrawer(false)
+  }
+  const tomorrowLabel = `Tomorrow · ${WEEKDAYS[tomorrow.dow]} ${Number(tomorrow.date.slice(5, 7))}/${Number(tomorrow.date.slice(8, 10))}`
 
   useEffect(() => replaceParams('planner', toParams(filter, bench, personal, wx, open)), [filter, bench, personal, wx, open])
 
@@ -148,88 +186,127 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
   }
   const setP = (k: keyof Personal) => (e: React.ChangeEvent<HTMLInputElement>) => setPersonal({ ...personal, [k]: Math.max(0, Number(e.target.value) || 0) })
 
-  return (
-    <div className="split">
-      <aside>
-        <Group title="Court time">
-          <Checks cols={3} options={HOURS} selected={filter.hours} onChange={(hours) => setFilter({ ...filter, hours })} label={hourLabel} />
-        </Group>
-        <Group title="Day">
-          <Checks cols={4} options={DAYS} selected={filter.weekdays} onChange={(weekdays) => setFilter({ ...filter, weekdays })} label={(d) => WEEKDAYS[d]} />
-        </Group>
-        <Group title="Month">
-          <Checks cols={4} options={SEASON_MONTHS} selected={filter.months} onChange={(months) => setFilter({ ...filter, months })} label={(m) => MONTHS[m - 1]} />
-        </Group>
-        <Group title="Courts">
-          <div className="checks c2">
+  const summaryText = incomplete
+    ? 'Choose court time, day and month'
+    : `${filter.weekdays.map((d) => WEEKDAYS[d]).join(', ')} · ${filter.months.map((m) => MONTHS[m - 1]).join(', ')} · ${filter.hours.map(hourLabel).join(', ')}`
+
+  const filters = (
+    <>
+      <Group title="Court time">
+        <Checks cols={3} options={HOURS} selected={filter.hours} onChange={(hours) => setFilter({ ...filter, hours })} label={hourLabel} />
+      </Group>
+      <Group title="Day">
+        <Checks cols={4} options={DAYS} selected={filter.weekdays} onChange={(weekdays) => setFilter({ ...filter, weekdays })} label={(d) => WEEKDAYS[d]} />
+      </Group>
+      <Group title="Month">
+        <Checks cols={4} options={SEASON_MONTHS} selected={filter.months} onChange={(months) => setFilter({ ...filter, months })} label={(m) => MONTHS[m - 1]} />
+      </Group>
+      <Group title="Courts">
+        <div className="checks c2">
+          <label>
+            <input type="radio" name="courts" checked={filter.courts !== 'all'} onChange={() => setFilter({ ...filter, courts: 'walkup' })} />
+            <span>Walk-up</span>
+          </label>
+          <label>
+            <input type="radio" name="courts" checked={filter.courts === 'all'} onChange={() => setFilter({ ...filter, courts: 'all' })} />
+            <span>All</span>
+          </label>
+        </div>
+        {onlineCourts.length > 0 && <div className="hint">Courts {ranges(onlineCourts)} are mostly booked online, so they’re left out by default.</div>}
+      </Group>
+      <details>
+        <summary className="small" style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--ink-2)', marginBottom: 8 }}>
+          More filters
+        </summary>
+        <Group title="Season">
+          <div className="checks c3">
             <label>
-              <input type="radio" name="courts" checked={filter.courts !== 'all'} onChange={() => setFilter({ ...filter, courts: 'walkup' })} />
-              <span>Walk-up</span>
-            </label>
-            <label>
-              <input type="radio" name="courts" checked={filter.courts === 'all'} onChange={() => setFilter({ ...filter, courts: 'all' })} />
+              <input type="radio" name="season" checked={!filter.years.length} onChange={() => setFilter({ ...filter, years: [] })} />
               <span>All</span>
             </label>
-          </div>
-          {onlineCourts.length > 0 && <div className="hint">Courts {ranges(onlineCourts)} are mostly booked online, so they’re left out by default.</div>}
-        </Group>
-        <details>
-          <summary className="small" style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--ink-2)', marginBottom: 8 }}>
-            More filters
-          </summary>
-          <Group title="Season">
-            <div className="checks c3">
-              <label>
-                <input type="radio" name="season" checked={!filter.years.length} onChange={() => setFilter({ ...filter, years: [] })} />
-                <span>All</span>
+            {years.map((y) => (
+              <label key={y}>
+                <input type="radio" name="season" checked={filter.years.length === 1 && filter.years[0] === y} onChange={() => setFilter({ ...filter, years: [y] })} />
+                <span>{y}</span>
               </label>
-              {years.map((y) => (
-                <label key={y}>
-                  <input type="radio" name="season" checked={filter.years.length === 1 && filter.years[0] === y} onChange={() => setFilter({ ...filter, years: [y] })} />
-                  <span>{y}</span>
-                </label>
+            ))}
+          </div>
+        </Group>
+        <Group title="Weather">
+          <div className="field">
+            <label htmlFor="wx">Rain before</label>
+            <select id="wx" disabled={!wxAvailable} value={wx} onChange={(e) => setWx(e.target.value as PlannerWeather)}>
+              {Object.entries(PLANNER_WEATHER).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
               ))}
-            </div>
-          </Group>
-          <Group title="Weather">
-            <div className="field">
-              <label htmlFor="wx">Rain before</label>
-              <select id="wx" disabled={!wxAvailable} value={wx} onChange={(e) => setWx(e.target.value as PlannerWeather)}>
-                {Object.entries(PLANNER_WEATHER).map(([k, v]) => (
-                  <option key={k} value={k}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-              <label htmlFor="open">Mornings</label>
-              <select id="open" disabled={!wxAvailable} value={open} onChange={(e) => setOpen(e.target.value as OpeningFilter)}>
-                <option value="any">Any</option>
-                <option value="late">Closed by rain</option>
-                <option value="normal">Open as usual</option>
-              </select>
-            </div>
-          </Group>
-        </details>
-        <div className="row" style={{ marginTop: 8 }}>
-          <button className="btn" type="button" onClick={copyLink}>
-            {copied ? 'Copied' : 'Copy link'}
-          </button>
-          <button
-            className="btn"
-            type="button"
-            onClick={() => {
-              setFilter(DEFAULT_FILTER)
-              setWx('any')
-              setOpen('any')
-            }}
-          >
-            Reset
-          </button>
+            </select>
+            <label htmlFor="hol">Holidays</label>
+            <label className="check small" style={{ margin: 0 }}>
+              <input id="hol" type="checkbox" checked={!!filter.holidays} onChange={(e) => setFilter({ ...filter, holidays: e.target.checked })} />
+              Include
+            </label>
+            <label htmlFor="open">Mornings</label>
+            <select id="open" disabled={!wxAvailable} value={open} onChange={(e) => setOpen(e.target.value as OpeningFilter)}>
+              <option value="any">Any</option>
+              <option value="late">Closed by rain</option>
+              <option value="normal">Open as usual</option>
+            </select>
+          </div>
+        </Group>
+      </details>
+      <div className="row" style={{ marginTop: 8 }}>
+        <button className="btn" type="button" onClick={copyLink}>
+          {copied ? 'Copied' : 'Copy link'}
+        </button>
+        <button
+          className="btn"
+          type="button"
+          onClick={() => {
+            setFilter(DEFAULT_FILTER)
+            setWx('any')
+            setOpen('any')
+          }}
+        >
+          Reset
+        </button>
+      </div>
+</>
+  )
+
+  return (
+    <div className="split">
+      {isMobile ? (
+        <div className="mobile-filters">
+          <div className="row">
+            <button className="btn primary" type="button" onClick={applyTomorrow}>
+              {tomorrowLabel}
+            </button>
+            <button className="btn" type="button" onClick={copyLink}>
+              {copied ? 'Copied' : 'Share'}
+            </button>
+          </div>
+          <details className="filter-drawer" open={drawer} onToggle={(e) => setDrawer((e.target as HTMLDetailsElement).open)}>
+            <summary>
+              <span className="filter-summary">{summaryText}</span>
+              <span className="filter-change">{drawer ? 'Done' : 'Change'}</span>
+            </summary>
+            <div className="filter-body">{filters}</div>
+          </details>
         </div>
-      </aside>
+      ) : (
+        <aside>
+          <button className="btn primary" type="button" style={{ width: '100%', marginBottom: 14 }} onClick={applyTomorrow}>
+            {tomorrowLabel}
+          </button>
+          {filters}
+        </aside>
+      )}
 
       <section aria-label="Results">
         {initial.invalid.length > 0 && <div className="note">Some link settings were invalid and were reset: {inList(initial.invalid)}.</div>}
+        {tomorrowNote && <div className="note">{tomorrowNote}</div>}
 
         {incomplete ? (
           <div className="note">Pick at least one court time, day, and month.</div>
@@ -241,6 +318,13 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
               <p style={{ fontSize: 16, maxWidth: 720 }}>
                 On past days like this, half of the {courtText} were taken by <b>{clock(r.pooled.p50)}</b> and three in four by <b>{clock(r.pooled.p75)}</b>.
                 On a typical day the last one went at <b>{clock(r.latest.last.p50)}</b>.
+                {r.freed.count > 0 && (
+                  <>
+                    {' '}
+                    Some come back: {num(r.freed.count)} ({Math.round((r.freed.count / r.slotCount) * 100)}%) were freed by a cancellation or no-show and
+                    taken again, usually around <b>{clock(r.freed.retakeMedian)}</b>.
+                  </>
+                )}
               </p>
               <div className="readouts">
                 <Readout label="Half taken by" value={clock(r.pooled.p50)} accent />

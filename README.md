@@ -44,9 +44,9 @@ Input paths, the historical cutoff, timezone, and weather units are set in `conf
 
 ## What's in the site
 
-Look: parks-green palette (inspired by public park signage) with an original tennis-ball mark; no official logos, seals or NYC.gov chrome. Tabs, in plain language:
+Look: parks-green palette; owner-supplied logo (`app/public/logo.jpg`, also the iPhone home-screen icon). Built phone-first: on iPhones the answer comes first, filters collapse into a one-line summary, and inputs are sized so Safari doesn't zoom. Tabs, in plain language:
 
-- **When to go** (home): pick court time, day and month. You get a one-sentence answer (half taken by…, three in four by…, last one typically at…), a "be in line by" time with an alarm calculator, and two charts: how fast each day's courts went, and when bookings were made. Counts **walk-up bookings only**, on **walk-up courts** by default: courts 19–24 are mostly booked online and left out unless you choose All. More filters (season, rain before, mornings closed by rain) and every day's detail are tucked away.
+- **When to go** (home): tap **Tomorrow** or pick court time, day and month. You get a one-sentence answer (half taken by…, three in four by…, last one typically at…), a "be in line by" time with an alarm calculator, and two charts: how fast each day's courts went, and when bookings were made. Counts **walk-up bookings only**, on **walk-up courts** by default: courts 19–24 are mostly booked online and left out unless you choose All. More filters (season, rain before, mornings closed by rain) and every day's detail are tucked away.
 - **After rain**: live Central Park rain for yesterday or the last 2–3 days (NWS), or a number you enter. It shows how past days like it went: when courts came back, how often mornings were closed, and how much sooner afternoon and evening walk-ups went.
 - **Rain & closures**: how much rain closes courts (same day, day before, 2- and 3-day totals), and days that were closed with little or no rain. Each of those days gets a label (no rain nearby / rain came later / wet from earlier days) and an hour-by-hour chart of rain against court status. Also split decisions, adjustable thresholds, and sources.
 - **Court history**: any date as a grid, with times down the side, courts across, and a rain column.

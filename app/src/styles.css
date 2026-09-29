@@ -50,7 +50,8 @@ p { margin: 0 0 8px; }
 
 /* ---------- masthead ---------- */
 .masthead { max-width: 1240px; margin: 0 auto; padding: 14px 20px 0; }
-.brandline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.brandline { display: flex; align-items: center; gap: 12px; }
+.brandline .wordmark { min-width: 0; }
 .logo { width: 46px; height: 46px; flex: none; }
 .wordmark { font: 700 24px/1.1 var(--sans); letter-spacing: -0.01em; color: var(--ink); text-decoration: none; }
 .wordmark:hover { color: var(--ink); }
@@ -195,3 +196,52 @@ table.court-grid td { padding: 0; }
 .cell.missing { background: repeating-linear-gradient(45deg, var(--white) 0 3px, var(--hair-2) 3px 4px); }
 .cell[aria-pressed='true'] { outline: 2px solid var(--ink); outline-offset: 1px; }
 .rain-cell { display: block; min-width: 34px; height: 22px; line-height: 22px; text-align: center; font-size: 10px; color: var(--ink-2); background: var(--hair-2); border-radius: 2px; }
+
+/* ---------- logo, primary button, phone filter drawer ---------- */
+.logo { border-radius: 50%; object-fit: contain; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: var(--brand-dark); border-color: var(--brand-dark); color: #fff; }
+.mobile-filters { position: sticky; top: 0; z-index: 20; background: var(--white); padding: 8px 0 6px; margin: -8px 0 4px; border-bottom: 1px solid var(--hair); }
+.filter-drawer { margin-top: 8px; }
+.filter-drawer > summary {
+  list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer;
+  padding: 10px 12px; border: 1px solid var(--hair); border-radius: 6px; background: var(--brand-pale); font-size: 14px;
+}
+.filter-drawer > summary::-webkit-details-marker { display: none; }
+.filter-summary { font-weight: 600; color: var(--brand-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filter-change { flex: none; font-weight: 700; color: var(--brand-dark); text-decoration: underline; }
+.filter-body { padding: 12px 2px 4px; max-height: 70vh; overflow-y: auto; }
+
+/* ---------- phones (iPhone-first) ---------- */
+@media (max-width: 900px) {
+  body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); padding-bottom: env(safe-area-inset-bottom); }
+  .masthead { padding-top: calc(10px + env(safe-area-inset-top)); }
+  .logo { width: 38px; height: 38px; }
+  .wordmark { font-size: 19px; }
+  .wordmark small { font-size: 11px; }
+  .nav a { padding: 12px 14px; font-size: 15px; }
+  .meta { font-size: 11px; gap: 2px 10px; }
+  main { padding-top: 12px; }
+  .grp > h3 { font-size: 18px; }
+
+  /* 16px text stops iOS Safari from zooming when a field is tapped */
+  input[type='number'], input[type='date'], input[type='text'], select { font-size: 16px; padding: 8px 8px; min-height: 40px; }
+  input[type='number'] { width: 72px; }
+  .btn { min-height: 42px; padding: 9px 14px; font-size: 15px; }
+  .btn.small { min-height: 40px; padding: 8px 12px; font-size: 14px; }
+  .checks { gap: 6px; }
+  .checks label > span { padding: 10px 2px; font-size: 14px; border-radius: 6px; }
+  label.check { min-height: 36px; }
+
+  /* key figures: two per row, no dividers */
+  .readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+  .readout, .readout:first-child { padding: 0; border-left: 0; min-width: 0; }
+  .readout .v { font-size: 24px; }
+
+  table.dg { font-size: 13px; }
+  .grid-wrap { max-height: none; -webkit-overflow-scrolling: touch; }
+
+  /* court grid: keep the time column visible while scrolling across courts */
+  table.court-grid th[scope='row'], table.court-grid thead th:first-child { position: sticky; left: 0; z-index: 2; background: var(--white); }
+  .tooltip { white-space: normal; max-width: 240px; }
+}

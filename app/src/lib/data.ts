@@ -75,6 +75,11 @@ export interface Manifest {
     slot_ledger: LedgerStep[]
     row_ledger: { rule: string; rows: number }[]
     min_dates_for_planning_target: number
+    quality_version?: string
+    quality_ledger?: { rule: string; removed: number; unit: string; why: string }[]
+    screened_slots?: number
+    time_definition?: string
+    freed_then_retaken?: number
   }
   reference_checks: {
     name: string
@@ -124,7 +129,8 @@ export interface Timing {
   cohort_version: string
   unit: string
   dates: string[]
-  slots: { d: number[]; h: number[]; m: number[]; c: number[] }
+  slots: { d: number[]; h: number[]; m: number[]; c: number[]; r?: (number | null)[] }
+  holidays?: string[]
   hourly: { d: number[]; h: number[]; recorded: number[]; checkedin: number[]; qualifying: number[]; recorded_wc?: number[]; qualifying_wc?: number[] }
   court_groups?: { walkup: number[]; online: number[]; online_share: Record<string, number>; rule: string }
 }

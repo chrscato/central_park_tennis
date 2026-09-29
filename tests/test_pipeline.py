@@ -211,3 +211,34 @@ def test_insights_party_size_two_hour_and_partner_timing():
     pe = insights.partner_entry(norm, sb.slots, CUTOFF, [3, 4])
     assert pe["second"]["n"] == 3
     assert pe["second"]["share_after_start"] == round(1 / 3, 4)
+
+
+def test_quality_first_taken_pre_desk_and_quiet_days():
+    from pipeline import quality
+
+    rows = [
+        # court taken at 07:00, no-show, re-taken at 16:00 -> counts as taken 07:00, flagged freed
+        row(1, created="2025-04-02 07:00:00", player="No Show"),
+        row(1, created="2025-04-02 16:00:00"),
+        # entered before the desk opens -> removed
+        row(2, court=2, created="2025-04-02 05:40:00"),
+        # normal
+        row(3, court=3, created="2025-04-02 06:45:00"),
+    ] + [row(100 + i, court=4, start=f"2025-04-02 {7 + i:02d}:00:00", status="assigned", player="Assigned") for i in range(10)]
+    _, norm, sb, cb = run(rows)
+    taken = quality.first_taken(norm, cb.timing)
+    t1 = taken.set_index("slot_id").loc["1"]
+    assert t1["taken_local"].strftime("%H:%M") == "07:00" and bool(t1["freed_then_retaken"])
+    qr = quality.screen_timing(taken, sb.slots)
+    assert set(qr.timing["slot_id"]) == {"1", "3"}
+    assert qr.ledger[0]["removed"] == 1
+
+
+def test_quality_drops_dry_days_with_no_morning_walkups():
+    from pipeline import quality
+
+    rows = [row(i, court=i, created="2025-04-02 10:30:00") for i in range(1, 12)]
+    _, norm, sb, cb = run(rows)
+    qr = quality.screen_timing(quality.first_taken(norm, cb.timing), sb.slots)
+    assert qr.timing.empty
+    assert qr.ledger[2]["removed"] == 11

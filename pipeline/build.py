@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import core, insights, publish, weather_payload
+from . import core, insights, publish, quality, weather_payload
 
 PIPELINE_VERSION = "0.1.0"
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,11 +65,25 @@ def run(config_path: Path) -> int:
 
     print("[4/6] successful walkup cohort")
     cb = core.walkup_cohort(norm, slots, cutoff)
-    timing = cb.timing
+    raw_timing = cb.timing  # unscreened cohort: used only for reconciliation
+    qcfg = cfg.get("quality", {})
+    h, mnt = (int(x) for x in qcfg.get("desk_open", "06:30").split(":"))
+    taken_timing = quality.first_taken(norm, raw_timing)
+    qr = quality.screen_timing(
+        taken_timing,
+        slots,
+        desk_open_minute=h * 60 + mnt,
+        grace_minutes=int(qcfg.get("grace_minutes", 10)),
+        min_day_court_hours=int(qcfg.get("min_day_court_hours", 10)),
+        quiet_morning_minute=int(qcfg.get("quiet_morning_before_hour", 9)) * 60,
+    )
+    timing = qr.timing
     groups = core.court_groups(norm, slots)
-    hourly = core.coverage_hourly(slots, timing, groups["walkup"])
+    hourly = core.coverage_hourly(slots, raw_timing, groups["walkup"])  # weather joins: all records
+    planner_hourly = core.coverage_hourly(slots[~slots["date"].isin(qr.partial_days)], timing, groups["walkup"])
     daily = core.coverage_daily(slots, cutoff)
 
+    ref_raw = core.planner_reference(raw_timing, month=4, weekday=2, hours=[18])
     ref = core.planner_reference(timing, month=4, weekday=2, hours=[18])
 
     latest_created = norm["created_local"].max()
@@ -82,9 +96,9 @@ def run(config_path: Path) -> int:
         "reservation_date_min": slots["date"].min(),
         "reservation_date_max": slots["date"].max(),
         "latest_booking_or_cancellation_activity": latest_activity.strftime("%Y-%m-%d"),
-        "qualifying_successful_walkup_slots": int(len(timing)),
-        "april_wednesday_6pm_slots": ref["slots"],
-        "april_wednesday_6pm_dates": ref["dates"],
+        "qualifying_successful_walkup_slots": int(len(raw_timing)),
+        "april_wednesday_6pm_slots": ref_raw["slots"],
+        "april_wednesday_6pm_dates": ref_raw["dates"],
     }
     reconciliation = [
         {"property": k, "prior": PRIOR_REPORTED[k], "recomputed": recomputed[k], "match": PRIOR_REPORTED[k] == recomputed[k]}
@@ -159,6 +173,11 @@ def run(config_path: Path) -> int:
         "cohort": {
             "version": cohort_version,
             "slot_ledger": cb.slot_ledger,
+            "quality_version": quality.QUALITY_VERSION,
+            "quality_ledger": qr.ledger,
+            "screened_slots": int(len(timing)),
+            "time_definition": "when a court-hour was first taken by a walk-up (earliest same-day walk-up entry, even if that party later cancelled or didn't show), for court-hours that were played",
+            "freed_then_retaken": int(timing["freed_then_retaken"].sum()),
             "row_ledger": cb.row_ledger,
             "min_dates_for_planning_target": cfg["metrics"]["min_dates_for_planning_target"],
         },
@@ -192,7 +211,9 @@ def run(config_path: Path) -> int:
     insight_payload = {
         "party_size": insights.party_sizes(norm, slots, cutoff, groups["walkup"]),
         "two_hour": insights.two_hour_bookings(norm, slots, cutoff),
-        "partner_entry": insights.partner_entry(norm, slots, cutoff, groups["walkup"]),
+        "partner_entry": insights.partner_entry(
+            norm, slots, cutoff, groups["walkup"], window=tuple(qcfg.get("partner_window_minutes", [-60, 240]))
+        ),
     }
 
     print("[5/6] writing private intermediates")
@@ -208,7 +229,7 @@ def run(config_path: Path) -> int:
         staging,
         manifest,
         publish.overview_payload(slots, daily, cutoff),
-        publish.timing_payload(timing, hourly, cutoff, cohort_version, groups),
+        publish.timing_payload(timing, planner_hourly, cutoff, f"{cohort_version}+first-taken+{quality.QUALITY_VERSION}", groups, holidays=cfg.get("calendar", {}).get("holidays", [])),
         publish.slot_partitions(norm, slots, timing, cutoff, wx_by_date),
         timing,
         daily,

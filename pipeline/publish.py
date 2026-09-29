@@ -61,7 +61,9 @@ def overview_payload(slots: pd.DataFrame, daily: pd.DataFrame, cutoff: str) -> d
     }
 
 
-def timing_payload(timing: pd.DataFrame, hourly: pd.DataFrame, cutoff: str, cohort_version: str, groups: dict | None = None) -> dict:
+def timing_payload(
+    timing: pd.DataFrame, hourly: pd.DataFrame, cutoff: str, cohort_version: str, groups: dict | None = None, holidays: list[str] | None = None
+) -> dict:
     hourly = hourly[hourly["date"] < cutoff]
     dates = sorted(set(hourly["date"]))
     idx = {d: i for i, d in enumerate(dates)}
@@ -74,6 +76,12 @@ def timing_payload(timing: pd.DataFrame, hourly: pd.DataFrame, cutoff: str, coho
             "h": timing["hour"].astype(int).tolist(),
             "m": timing["minute_of_day"].astype(int).tolist(),
             "c": timing["court_num"].astype(int).tolist(),
+            # when the court was re-taken after a cancellation/no-show (null if taken once)
+            **(
+                {"r": [int(m) if f else None for m, f in zip(timing["retaken_minute"], timing["freed_then_retaken"])]}
+                if "freed_then_retaken" in timing
+                else {}
+            ),
         },
         "hourly": {
             "d": [idx[d] for d in hourly["date"]],
@@ -83,6 +91,8 @@ def timing_payload(timing: pd.DataFrame, hourly: pd.DataFrame, cutoff: str, coho
             "qualifying": hourly["qualifying"].astype(int).tolist(),
         },
     }
+    if holidays:
+        out["holidays"] = sorted(holidays)
     if groups is not None and "recorded_walkup_courts" in hourly:
         out["court_groups"] = {k: groups[k] for k in ("walkup", "online", "online_share", "rule")}
         out["hourly"]["recorded_wc"] = hourly["recorded_walkup_courts"].astype(int).tolist()
@@ -183,7 +193,10 @@ def audit_public(staging: Path, reasons: set[str]) -> list[tuple[str, str]]:
     leaks = []
     for p in staging.rglob("*"):
         if p.is_file():
-            text = p.read_text(encoding="utf-8")
+            try:
+                text = p.read_bytes().decode("utf-8")
+            except UnicodeDecodeError:
+                continue  # images and other binaries can't carry staff-note text
             for hit in audit_text_for_reasons(text, reasons):
                 leaks.append((str(p), hit))
     return leaks
