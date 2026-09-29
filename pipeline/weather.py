@@ -101,6 +101,61 @@ def check_units(daily: pd.DataFrame, units: str) -> list[str]:
     return warn
 
 
+NCEI_URL = "https://www.ncei.noaa.gov/access/services/data/v1"
+
+
+def fetch_ncei_daily(station: str, start: str, end: str, cache_dir: Path, timeout: int = 60) -> tuple[pd.DataFrame, dict]:
+    """NCEI Access Data Service daily summaries (PRCP, inches) with a raw-response cache.
+
+    The service lags real time by several days, so it only fills recent gaps in
+    the historical series. The raw JSON and retrieval metadata are cached; if the
+    network is unavailable, the newest cached response for the same request is used.
+    """
+    import json
+    import urllib.parse
+    import urllib.request
+    from datetime import datetime, timezone
+
+    params = {
+        "dataset": "daily-summaries",
+        "stations": station,
+        "dataTypes": "PRCP",
+        "startDate": start,
+        "endDate": end,
+        "units": "standard",
+        "format": "json",
+        "includeAttributes": "true",
+    }
+    url = f"{NCEI_URL}?{urllib.parse.urlencode(params)}"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = f"ncei_{station}_{start}_{end}.json"
+    meta = {"url": url, "cache_file": key}
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            body = r.read()
+        rows = json.loads(body)
+        (cache_dir / key).write_bytes(body)
+        meta.update(retrieved_at=datetime.now(timezone.utc).replace(microsecond=0).isoformat(), from_cache=False)
+        (cache_dir / (key + ".meta.json")).write_text(json.dumps(meta, indent=2))
+    except Exception as e:  # offline: fall back to cache
+        if not (cache_dir / key).exists():
+            raise RuntimeError(f"NCEI fetch failed and no cache: {e}") from e
+        rows = json.loads((cache_dir / key).read_text())
+        old = cache_dir / (key + ".meta.json")
+        meta.update(json.loads(old.read_text()) if old.exists() else {}, from_cache=True, fetch_error=str(e))
+
+    recs = []
+    for r in rows:
+        v = str(r.get("PRCP", "")).strip()
+        flag = str(r.get("PRCP_ATTRIBUTES", "")).split(",")[0]
+        amt = float(v) if v not in ("", "M") else np.nan
+        recs.append({"date": r["DATE"][:10], "rain_in": amt, "trace": flag == "T" and amt == 0})
+    df = pd.DataFrame(recs, columns=["date", "rain_in", "trace"])
+    meta["days_returned"] = int(len(df))
+    meta["last_date"] = df["date"].max() if len(df) else None
+    return df, meta
+
+
 # ---------------------------------------------------------------------------
 # Hourly (IEM METAR)
 # ---------------------------------------------------------------------------
@@ -168,8 +223,9 @@ def daily_from_hourly(grid: pd.DataFrame, basis: str = "local", tz: str = "Ameri
 def build_daily(lcd: pd.DataFrame, hourly_daily: pd.DataFrame, start: str, end: str) -> pd.DataFrame:
     """Continuous daily series [start, end] with trailing-window features.
 
-    Primary source: LCD daily summary. Fallback: complete-day IEM hourly sums
-    (flagged ``source='iem-hourly-sum'``) for dates LCD does not cover.
+    Primary source: official daily summaries (``lcd`` may also carry
+    ``source='ncei-daily-api'`` rows for recent days). Fallback: complete-day IEM
+    hourly sums (flagged ``source='iem-hourly-sum'``) for dates neither covers.
     """
     dates = pd.date_range(start, end, freq="D").strftime("%Y-%m-%d")
     base = pd.DataFrame({"date": dates})

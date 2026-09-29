@@ -56,6 +56,7 @@ def build(
     cutoff: str,
     first_date: str,
     dry_version: str,
+    ncei_cache: Path | None = None,
 ) -> tuple[dict, dict[str, list]]:
     if not lcd_paths or not iem_path.exists():
         raise FileNotFoundError(f"weather inputs missing (lcd files={len(lcd_paths)}, iem exists={iem_path.exists()})")
@@ -70,7 +71,23 @@ def build(
 
     start = (pd.Timestamp(first_date) - pd.Timedelta(days=3)).strftime("%Y-%m-%d")
     end = (pd.Timestamp(cutoff) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    d = weather.build_daily(lcd, hdaily, start, end)
+
+    ncei_meta = None
+    lcd_last = lcd["date"].max()
+    if ncei_cache and lcd_last < end:
+        fill_start = (pd.Timestamp(lcd_last) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+        try:
+            ncei, ncei_meta = weather.fetch_ncei_daily("USW00094728", fill_start, end, ncei_cache)
+            ncei = ncei[~ncei["date"].isin(lcd["date"]) & ncei["rain_in"].notna()].assign(
+                suspect=False, tmax_f=np.nan, tmin_f=np.nan, source="ncei-daily-api"
+            )
+            lcd_all = pd.concat([lcd, ncei], ignore_index=True).sort_values("date")
+        except Exception as e:  # never block the build on the network
+            ncei_meta = {"error": str(e)}
+            lcd_all = lcd
+    else:
+        lcd_all = lcd
+    d = weather.build_daily(lcd_all, hdaily, start, end)
 
     cells = hourly_cov[hourly_cov["date"] < cutoff][["date", "hour", "recorded", "all-checkedin", "rained-out"]].reset_index(drop=True)
     feats = weather.slot_hour_features(grid, cells)
@@ -131,6 +148,7 @@ def build(
             "days_by_source": {k: int(v) for k, v in d["source"].value_counts().items()},
             "days_covered": int(len(covered)),
             "days_total": int(len(d)),
+            "ncei_gap_fill": ncei_meta,
         },
         "reconciliation": recon,
         "warnings": warnings,

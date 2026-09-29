@@ -36,6 +36,7 @@ The sanitized public assets in `app/public/data/` are committed, so `npm run dev
 | `central_park_reservation_FOIL_data_dictionary_updated.txt` | `data/raw/` (copy in `docs/source/`) | dictionary only |
 | NOAA LCD `LCD_USW00094728_*.csv` (metric units) | `data/nyc_weather/` | No (large; public NOAA data) |
 | IEM ASOS `NYC_weather.csv` | `data/` | No (large; public IEM data) |
+| NCEI API response cache | `data/raw/weather_cache/` | No (fetched at build time to fill days after the LCD file) |
 | Private intermediates (Parquet) | `data/processed/` | No |
 | Sanitized public assets | `app/public/data/` | Yes (generated; allowlisted fields only) |
 
@@ -45,6 +46,7 @@ Input paths, the historical cutoff, timezone, and weather units are set in `conf
 
 - **Overview**: recorded court-hours, recorded checked-in and rained-out shares (with denominators), weekly status composition, coverage calendar with missing dates visible, and evidence cards.
 - **Walkup planner**: month / weekday / season / slot-hour filters (default: April, Wednesday, 5–6 p.m.), plus a weather filter for the day(s) before. Shows pooled and day-weighted percentiles, daily booking curves with median and IQR band, a histogram, and a per-date table. The optional planning benchmark is suppressed below 10 dates. Also includes an alarm calculator and a shareable URL (travel details only if opted in).
+- **Rain outlook**: pulls yesterday's and today's rainfall live from the NWS feed for the Central Park gauge (or takes a manual value). For comparable past days, it shows the recorded rained-out share by start hour, when recorded play resumed, and how often mornings were washed out. It also shows how much earlier afternoon/evening walkups were booked on late-opening days (e.g. 1–4 p.m. slots: ~72 min earlier on weekdays).
 - **Court explorer**: 26-court × hour grid per date with text status codes, an hourly rainfall strip, same-day/previous-day/2-/3-day rainfall, hatched "not in export" cells, keyboard navigation, and sanitized slot details.
 - **Weather**: rained-out share by rainfall bucket for the same day, previous day, 2 and 3 days before, and during / 3h / 6h / 24h before the slot. Also a daily rain vs. rain-out timeline, rain-outs on measured-dry days (as leads, not findings), and source checks.
 - **FOIL & methodology**: checksums, cutoff and timezone assumptions, reconciliation with earlier figures, exclusion ledgers, downloads, what the records cannot answer, records still needed, and a change log.

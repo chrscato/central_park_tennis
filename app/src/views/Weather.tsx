@@ -205,7 +205,7 @@ export function Weather({ manifest, overview, weather }: { manifest: Manifest; o
           </table>
         </div>
         <ul className="small" style={{ marginTop: 12 }}>
-          <li>Daily totals come from NOAA’s official daily summary (converted from millimetres; trace kept). NOAA daily summaries end {cov.lcd_daily_last}; later days use complete hourly sums ({num(cov.days_by_source['iem-hourly-sum'] ?? 0)} days) or stay missing ({num(cov.days_by_source['missing'] ?? 0)}).</li>
+          <li>Daily totals come from NOAA’s official daily summary (converted from millimetres; trace kept). The supplied NOAA file ends {cov.lcd_daily_last}; later days come from NOAA’s NCEI data service ({num(cov.days_by_source['ncei-daily-api'] ?? 0)} days), complete hourly sums ({num(cov.days_by_source['iem-hourly-sum'] ?? 0)}), or stay missing ({num(cov.days_by_source['missing'] ?? 0)}).</li>
           <li>Hourly rain is read from each routine :51 observation’s precipitation group; “P0000” is a trace, and a “PNO” (gauge not operating) hour is missing.</li>
           <li>Check: hourly sums regrouped to NOAA’s standard-time days agree with the daily totals within 0.03&quot; on {pct(rc.wet_within_0_03_in, 0)} of {num(rc.wet_days)} wet days.</li>
           <li>“During the slot” uses the observation ending at :51 of the start hour; “before start” windows only use observations that end before the slot begins, so later rain never leaks in.</li>

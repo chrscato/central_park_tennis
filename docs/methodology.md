@@ -44,6 +44,21 @@ Any missing day makes the window missing. Trace flags carry through.
 
 **Dry-day rain-outs** (rained-out records when both the day and the day before measured dry) are listed as investigative leads, not errors: saturated courts after earlier storms, localized showers, maintenance, or recording practice can explain them.
 
+## Rain outlook (after-the-rain view)
+
+**Live rainfall.** The browser calls the National Weather Service API (`api.weather.gov/stations/KNYC/observations`, the same Central Park ASOS gauge; no key, CORS enabled). Routine :51 METARs are parsed with the same P-group rules as the pipeline. If the feed omits the raw METAR, its decoded `precipitationLastHour` (mm) is used; if neither exists the hour is missing. Yesterday's total is shown as complete only when all 24 hourly reports are present; otherwise the partial sum is shown with a "may be low" warning. Users can override with a manual value. Live days are local clock days; historical "previous day" values are NOAA's Local Standard Time days (a one-hour offset during DST).
+
+NOAA's NCEI Access Data Service is **not** used live: its daily summaries lag real time by about a week (on 2026-09-29 the newest Central Park value was 2026-09-22). The pipeline uses it only to fill days after the supplied LCD file ends (`ncei_fill`), caching raw responses in `data/raw/weather_cache/` and falling back to the cache when offline.
+
+**Comparable days.** Past reservation dates whose previous-day rain falls in the same bucket as the entered amount; with "Stays dry", only dates with no measurable rain that day (trace allowed). Outputs:
+- Per start hour: recorded rained-out share of recorded court-hours (a historical frequency of recorded statuses, not a closure schedule).
+- **First recorded play:** earliest start hour with at least one court-hour recorded "all checked in" (median and IQR across days).
+- **Late opening:** at least 50% of recorded 7–11 a.m. court-hours rained out (days with under 5 recorded morning court-hours are "unknown").
+
+**Late-opening walkups.** Weekday walkup entry times (April–October) for afternoon (1–4 p.m.) and evening (5–7 p.m.) starts, compared between late- and normal-opening days using the day-weighted median. The planner offers the same opening filter; opening status is known on the morning itself, not in advance.
+
+Small samples (for example 19 dry days after 0.50"+ of rain) are shown with their counts.
+
 ## Rules applied everywhere
 
 - Court-hours = distinct validated slot IDs; a CSV row is not a booking, player, or court-hour.

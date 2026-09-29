@@ -175,6 +175,7 @@ def run(config_path: Path) -> int:
             cutoff,
             slots["date"].min(),
             wcfg.get("dry_definition_version", "dry-v1"),
+            _path(wcfg["ncei_cache_dir"]) if wcfg.get("ncei_fill") else None,
         )
         c, rc = wx["coverage"], wx["reconciliation"]
         print(f"  {c['days_covered']}/{c['days_total']} days covered {c['days_by_source']}; wet-day hourly/daily agreement {rc['wet_within_0_03_in']}")

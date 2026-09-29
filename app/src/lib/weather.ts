@@ -25,6 +25,7 @@ export interface WeatherData {
     days_by_source: Record<string, number>
     days_covered: number
     days_total: number
+    ncei_gap_fill?: { url?: string; retrieved_at?: string; from_cache?: boolean; last_date?: string | null; error?: string } | null
   }
   reconciliation: {
     complete_days_compared: number

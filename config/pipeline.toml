@@ -31,6 +31,10 @@ lcd_units = "metric"
 # IEM ASOS export for station NYC with valid times in America/New_York.
 iem_csv = "data/NYC_weather.csv"
 dry_definition_version = "dry-v1"
+# Fill days after the LCD file ends from the NCEI Access Data Service
+# (daily-summaries, USW00094728). Lags real time by ~a week. Raw responses cached.
+ncei_fill = true
+ncei_cache_dir = "data/raw/weather_cache"
 
 [outputs]
 processed_dir = "data/processed"

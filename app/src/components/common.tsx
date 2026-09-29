@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { STATUS_LABEL, STATUSES, type Manifest, type Status } from '../lib/data'
 
 export type Async<T> = { status: 'loading' } | { status: 'error'; error: string } | { status: 'ready'; data: T }
@@ -58,6 +58,26 @@ export function StatusLegend({ includeMissing = false, statuses = STATUSES }: { 
       )}
     </div>
   )
+}
+
+/** Keeps one broken view from blanking the whole app. */
+export class ViewBoundary extends Component<{ children: ReactNode; resetKey: string }, { error: string | null; key: string }> {
+  state = { error: null as string | null, key: this.props.resetKey }
+  static getDerivedStateFromError(e: unknown) {
+    return { error: String(e) }
+  }
+  static getDerivedStateFromProps(p: { resetKey: string }, s: { error: string | null; key: string }) {
+    return p.resetKey !== s.key ? { error: null, key: p.resetKey } : null
+  }
+  render() {
+    if (this.state.error)
+      return (
+        <div className="callout" role="alert">
+          This view hit an error ({this.state.error}). Other pages still work.
+        </div>
+      )
+    return this.props.children
+  }
 }
 
 export function Loading({ what }: { what: string }) {

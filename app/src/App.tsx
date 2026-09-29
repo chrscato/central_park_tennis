@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
-import { LoadError, Loading, useAsync } from './components/common'
+import { LoadError, Loading, useAsync, ViewBoundary } from './components/common'
 import { loadManifest, loadOverview, loadTiming, loadWeather } from './lib/data'
 import { longDate } from './lib/format'
 import { href, useLocation, type Route } from './lib/url'
 import { Courts } from './views/Courts'
 import { Methodology } from './views/Methodology'
+import { Outlook } from './views/Outlook'
 import { Overview } from './views/Overview'
 import { Planner } from './views/Planner'
 import { Weather } from './views/Weather'
@@ -12,6 +13,7 @@ import { Weather } from './views/Weather'
 const NAV: { route: Route; label: string }[] = [
   { route: 'overview', label: 'Overview' },
   { route: 'planner', label: 'Walkup planner' },
+  { route: 'outlook', label: 'Rain outlook' },
   { route: 'courts', label: 'Court records' },
   { route: 'weather', label: 'Weather' },
   { route: 'methodology', label: 'FOIL & methodology' },
@@ -76,12 +78,15 @@ export default function App() {
         )}
         {data.status === 'loading' && <Loading what="records" />}
         {data.status === 'error' && <LoadError error={data.error} />}
-        {data.status === 'ready' &&
-          (() => {
+        {data.status === 'ready' && (
+          <ViewBoundary resetKey={loc.route}>
+          {(() => {
             const [m, ov, t, w] = data.data
             switch (loc.route) {
               case 'planner':
                 return <Planner key="planner" manifest={m} timing={t} weather={w} params={loc.params} />
+              case 'outlook':
+                return <Outlook manifest={m} timing={t} weather={w} />
               case 'courts':
                 return <Courts manifest={m} overview={ov} weather={w} params={loc.params} />
               case 'weather':
@@ -92,6 +97,8 @@ export default function App() {
                 return <Overview manifest={m} overview={ov} timing={t} weather={w} />
             }
           })()}
+          </ViewBoundary>
+        )}
       </main>
 
       <footer className="footer">

@@ -5,6 +5,7 @@ import type { Manifest, Timing } from '../lib/data'
 import { clock, hourLabel, listJoin, longDate, MONTHS, MONTHS_LONG, num, shortHour, WEEKDAYS, WEEKDAYS_LONG } from '../lib/format'
 import { alarmMinute, computePlanner, DEFAULT_FILTER, type PlannerFilter } from '../lib/stats'
 import { parseIntList, replaceParams } from '../lib/url'
+import { combineTests, OPENING_FILTER, openingTest, type OpeningFilter } from '../lib/outlook'
 import { PLANNER_WEATHER, plannerWeatherTest, type PlannerWeather, type WeatherData } from '../lib/weather'
 
 const SEASON_MONTHS = [4, 5, 6, 7, 8, 9, 10]
@@ -55,16 +56,23 @@ function readState(params: URLSearchParams, years: number[]) {
     if (rawWx in PLANNER_WEATHER) wx = rawWx as PlannerWeather
     else invalid.push('weather')
   }
-  return { filter, personal, bench, wx, invalid }
+  let open: OpeningFilter = 'any'
+  const rawOpen = params.get('open')
+  if (rawOpen != null) {
+    if (rawOpen in OPENING_FILTER) open = rawOpen as OpeningFilter
+    else invalid.push('opening')
+  }
+  return { filter, personal, bench, wx, open, invalid }
 }
 
-function toParams(f: PlannerFilter, bench: boolean, p: Personal, wx: PlannerWeather): URLSearchParams {
+function toParams(f: PlannerFilter, bench: boolean, p: Personal, wx: PlannerWeather, open: OpeningFilter): URLSearchParams {
   const q = new URLSearchParams()
   q.set('m', f.months.join(','))
   q.set('dow', f.weekdays.join(','))
   q.set('y', f.years.length ? f.years.join(',') : 'all')
   q.set('h', f.hours.join(','))
   if (wx !== 'any') q.set('wx', wx)
+  if (open !== 'any') q.set('open', open)
   if (!bench) q.set('bench', '0')
   if (p.share) {
     q.set('share', '1')
@@ -125,12 +133,16 @@ export function Planner({
   const [bench, setBench] = useState(initial.bench)
   const [personal, setPersonal] = useState(initial.personal)
   const [wx, setWx] = useState<PlannerWeather>(wxAvailable ? initial.wx : 'any')
+  const [open, setOpen] = useState<OpeningFilter>(wxAvailable ? initial.open : 'any')
   const [copied, setCopied] = useState(false)
 
-  useEffect(() => replaceParams('planner', toParams(filter, bench, personal, wx)), [filter, bench, personal, wx])
+  useEffect(() => replaceParams('planner', toParams(filter, bench, personal, wx, open)), [filter, bench, personal, wx, open])
 
   const minDates = manifest.cohort.min_dates_for_planning_target
-  const wxTest = useMemo(() => (wxAvailable ? plannerWeatherTest(weather, wx) : undefined), [weather, wx, wxAvailable])
+  const wxTest = useMemo(
+    () => (wxAvailable ? combineTests(plannerWeatherTest(weather, wx), openingTest(weather, open)) : undefined),
+    [weather, wx, open, wxAvailable],
+  )
   const r = useMemo(
     () =>
       computePlanner(timing, filter, {
@@ -142,7 +154,8 @@ export function Planner({
       }),
     [timing, filter, manifest, minDates, wxTest],
   )
-  const wxTxt = wx === 'any' ? '' : ` · ${PLANNER_WEATHER[wx].toLowerCase()}`
+  const wxTxt =
+    (wx === 'any' ? '' : ` · ${PLANNER_WEATHER[wx].toLowerCase()}`) + (open === 'any' ? '' : ` · ${OPENING_FILTER[open].toLowerCase()}`)
 
   const incomplete = !filter.months.length || !filter.weekdays.length || !filter.hours.length
   const monthsTxt = listJoin(filter.months.map((m) => MONTHS_LONG[m - 1]))
@@ -244,6 +257,21 @@ export function Planner({
               {wxAvailable
                 ? 'Central Park gauge, days before play only — what you could know that morning. Dates without weather data are left out and listed.'
                 : 'Weather data unavailable in this build.'}
+            </p>
+          </fieldset>
+          <fieldset>
+            <legend>
+              <label htmlFor="open">Morning courts</label>
+            </legend>
+            <select id="open" disabled={!wxAvailable} value={open} onChange={(e) => setOpen(e.target.value as OpeningFilter)} aria-describedby="open-note">
+              {Object.entries(OPENING_FILTER).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+            <p id="open-note" className="small muted" style={{ marginTop: 4 }}>
+              Late opening: at least half of recorded 7–11 a.m. court-hours rained out. Known that morning, not in advance.
             </p>
           </fieldset>
         </div>
@@ -385,9 +413,9 @@ export function Planner({
                 <div className="value">{num(r.noRecordDates.length)}</div>
                 <div className="note">No records at these hours</div>
               </div>
-              {wx !== 'any' && (
+              {(wx !== 'any' || open !== 'any') && (
                 <div className="card">
-                  <div className="label">Dates left out by weather filter</div>
+                  <div className="label">Dates left out by weather/opening filter</div>
                   <div className="value">{num(r.weatherExcludedDates + r.weatherUnknownDates.length)}</div>
                   <div className="note">
                     {num(r.weatherExcludedDates)} didn’t match; {num(r.weatherUnknownDates.length)} had no weather data

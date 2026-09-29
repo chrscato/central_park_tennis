@@ -21,7 +21,7 @@ const RECORDS_NEEDED = [
 ]
 
 const CHANGELOG = [
-  { date: '2026-09-29', text: 'First draft: verified data foundation (P0); overview, walkup planner and court explorer (P1); Central Park rainfall with previous-day and trailing 2-/3-day windows (P2).' },
+  { date: '2026-09-29', text: 'First draft: verified data foundation (P0); overview, walkup planner and court explorer (P1); Central Park rainfall with previous-day and trailing 2-/3-day windows (P2); rain outlook with live NWS gauge readings and late-opening analysis.' },
 ]
 
 export function Methodology({ manifest: m }: { manifest: Manifest }) {

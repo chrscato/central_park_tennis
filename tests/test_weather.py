@@ -135,3 +135,24 @@ def test_missing_hour_makes_window_missing(tmp_path):
     f = weather.slot_hour_features(grid, pd.DataFrame({"date": ["2025-06-01"], "hour": [14]}))
     assert math.isnan(f["prev3h_in"].iloc[0])
     assert f["during_in"].iloc[0] == 0.0
+
+
+def test_ncei_falls_back_to_cache_when_offline(tmp_path, monkeypatch):
+    import json
+    import urllib.request
+
+    key = "ncei_USW00094728_2026-09-19_2026-09-20.json"
+    rows = [
+        {"DATE": "2026-09-19", "PRCP": "0.00", "PRCP_ATTRIBUTES": "T,,1,2400"},
+        {"DATE": "2026-09-20", "PRCP": "0.28", "PRCP_ATTRIBUTES": ",,1,2400"},
+    ]
+    (tmp_path / key).write_text(json.dumps(rows))
+
+    def boom(*a, **k):
+        raise OSError("offline")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    df, meta = weather.fetch_ncei_daily("USW00094728", "2026-09-19", "2026-09-20", tmp_path)
+    assert meta["from_cache"] is True
+    assert df["rain_in"].tolist() == [0.0, 0.28]
+    assert df["trace"].tolist() == [True, False]
