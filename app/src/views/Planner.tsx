@@ -326,11 +326,15 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
                   </>
                 )}
               </p>
-              <div className="readouts">
-                <Readout label="Half taken by" value={clock(r.pooled.p50)} accent />
-                <Readout label="Three in four taken by" value={clock(r.pooled.p75)} />
-                <Readout label="Last one taken (typical day)" value={clock(r.latest.last.p50)} />
-                <Readout label="Based on" value={`${num(r.days.length)} days`} sub={`${num(r.slotCount)} walk-up bookings`} />
+              <div className="readouts readouts-5">
+                <Readout label="25% taken by" value={clock(r.pooled.p25)} />
+                <Readout label="50% taken by" value={clock(r.pooled.p50)} accent />
+                <Readout label="75% taken by" value={clock(r.pooled.p75)} />
+                <Readout label="Last 5 began" value={clock(r.latest.fifthLast.p50)} sub="typical day" />
+                <Readout label="Last one taken" value={clock(r.latest.last.p50)} sub="typical day" />
+              </div>
+              <div className="hint">
+                Based on {num(r.days.length)} days and {num(r.slotCount)} walk-up bookings.
               </div>
               {limited && (
                 <div className="note">
@@ -391,8 +395,12 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
               <Figure title="How fast each day’s courts went" sub="Share of the day’s walk-up bookings made by each time" source="Each grey line is one day; blue is the middle day.">
                 <CurvesChart result={r} showTarget={bench} />
               </Figure>
-              <Figure title="When bookings were made" sub={`Walk-up bookings per ${BIN} minutes, all matching days`} source="Source: NYC Parks FOIL records.">
-                <TimeHistogram bins={r.histogram} binMinutes={BIN} />
+              <Figure
+                title="How many courts go in each 15 minutes"
+                sub={`Courts taken per ${BIN} minutes on an average day like this`}
+                source={`Average over ${num(r.days.length)} matching days. Source: NYC Parks FOIL records.`}
+              >
+                <TimeHistogram bins={r.histogram} binMinutes={BIN} days={r.days.length} />
               </Figure>
             </div>
 
@@ -401,9 +409,8 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
                 More numbers & every day
               </summary>
               <div className="readouts" style={{ margin: '12px 0' }}>
-                <Readout label="A quarter taken by" value={clock(r.pooled.p25)} />
                 <Readout label="Typical day’s midpoint" value={clock(r.dayWeighted.p50)} sub={`${clock(r.dayWeighted.p25)}–${clock(r.dayWeighted.p75)}`} />
-                <Readout label="Last five began (typical day)" value={clock(r.latest.fifthLast.p50)} sub={`${num(r.latest.fifthLast.n)} days with 5+`} />
+                <Readout label="Last 5 began, days counted" value={num(r.latest.fifthLast.n)} sub="days with 5+ bookings" />
                 <Readout label="Last one taken, range" value={`${clock(r.latest.last.p25)}–${clock(r.latest.last.p75)}`} />
               </div>
               <label className="check small" style={{ marginBottom: 10 }}>

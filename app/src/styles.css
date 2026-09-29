@@ -245,3 +245,11 @@ table.court-grid td { padding: 0; }
   table.court-grid th[scope='row'], table.court-grid thead th:first-child { position: sticky; left: 0; z-index: 2; background: var(--white); }
   .tooltip { white-space: normal; max-width: 240px; }
 }
+
+/* 25% · 50% · 75% · last 5 · last one: one row on desktop; on phones 3 + 2 */
+@media (max-width: 900px) {
+  .readouts.readouts-5 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .readouts.readouts-5 .readout { grid-column: span 2; }
+  .readouts.readouts-5 .readout:nth-child(n + 4) { grid-column: span 3; }
+  .readouts.readouts-5 .readout .v { font-size: 20px; white-space: nowrap; }
+}

@@ -180,7 +180,8 @@ export function CurvesChart({ result, showTarget }: { result: PlannerResult; sho
 /* Distribution of entry times (pooled)                                */
 /* ------------------------------------------------------------------ */
 
-export function TimeHistogram({ bins, binMinutes }: { bins: { start: number; count: number }[]; binMinutes: number }) {
+/** Bookings per time window. With `days`, shows the average per day (count / days). */
+export function TimeHistogram({ bins, binMinutes, days }: { bins: { start: number; count: number }[]; binMinutes: number; days?: number }) {
   const [ref, width] = useWidth<HTMLDivElement>()
   const [tip, setTip] = useState<Tip | null>(null)
   const height = 300
@@ -188,7 +189,10 @@ export function TimeHistogram({ bins, binMinutes }: { bins: { start: number; cou
   const iw = Math.max(0, width - m.l - m.r)
   const ih = height - m.t - m.b
   if (!bins.length) return null
-  const ticks = niceTicks(Math.max(...bins.map((b) => b.count)), 3)
+  const per = days && days > 0 ? days : 1
+  const val = (b: { count: number }) => b.count / per
+  const fmt = (v: number) => (per > 1 && v < 10 && !Number.isInteger(v) ? v.toFixed(1) : num(Math.round(v)))
+  const ticks = niceTicks(Math.max(...bins.map(val)), 3)
   const yMax = ticks[ticks.length - 1]
   const slot = iw / bins.length
   const bw = Math.max(1, Math.min(24, slot - 2))
@@ -204,16 +208,16 @@ export function TimeHistogram({ bins, binMinutes }: { bins: { start: number; cou
               <g key={v}>
                 <line className="gridline" x1={0} x2={iw} y1={yOf(v)} y2={yOf(v)} />
                 <text x={-6} y={yOf(v)} dy="0.32em" textAnchor="end" className="num">
-                  {num(v)}
+                  {fmt(v)}
                 </text>
               </g>
             ))}
             {bins.map((b, i) => {
               const x = i * slot + (slot - bw) / 2
-              const h = ih - yOf(b.count)
+              const h = ih - yOf(val(b))
               return (
                 <g key={b.start}>
-                  {b.count > 0 && <path d={topRounded(x, yOf(b.count), bw, h, 0)} fill="var(--seq-3)" />}
+                  {b.count > 0 && <path d={topRounded(x, yOf(val(b)), bw, h, 0)} fill="var(--seq-3)" />}
                   <rect
                     x={i * slot}
                     y={0}
@@ -223,14 +227,26 @@ export function TimeHistogram({ bins, binMinutes }: { bins: { start: number; cou
                     onMouseMove={() =>
                       setTip({
                         x: m.l + i * slot + slot / 2,
-                        y: m.t + yOf(b.count),
+                        y: m.t + yOf(val(b)),
                         content: (
                           <>
                             <strong>
                               {clock(b.start)}–{clock(b.start + binMinutes - 1)}
                             </strong>
                             <br />
-                            {num(b.count)} slot{b.count === 1 ? '' : 's'} booked
+                            {per > 1 ? (
+                              <>
+                                {val(b).toFixed(1)} courts taken on an average day
+                                <br />
+                                <span style={{ color: 'var(--muted)' }}>
+                                  {num(b.count)} across {num(per)} days
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                {num(b.count)} court{b.count === 1 ? '' : 's'} taken
+                              </>
+                            )}
                           </>
                         ),
                       })
