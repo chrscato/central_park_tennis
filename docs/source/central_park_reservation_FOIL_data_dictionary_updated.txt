@@ -1,0 +1,56 @@
+schedule_slot_id: The unique, database-generated identifier for the schedule slot.
+
+court: The court the schedule slot is assigned to.
+
+reservation_time_and_date: The date and time the schedule slot is assigned to, separated
+by hour long blocks. A booking is made for this date and time on this slot's court.
+
+schedule_status: The status of the schedule slot, indicating if a booking can be
+made at the selected time. The possible statuses are:
+	-unbookable
+	-unassigned
+	-assigned
+	-rained-out
+	-all-checkedin
+	-booking-in-progress
+
+reason: If the booking has been canceled or otherwise unavailable, indicates the reason 
+for it provided by the staff member.
+
+creation_timestamp: The date and time the booking is created and assigned to a potential 
+player.
+
+player_status: The current status of the player who made the reservation. 
+This is separate from the status of the schedule slot. The possible statuses are:
+	-Assigned
+	-Checked in
+	-No Show
+	-Canceled
+	-Rained Out
+	-Booking in Progress
+	-Rained Out Rebooked
+	-Canceled Rebooked
+	-Assigned Rebooked
+
+method_of_reservation: Indicates the method the booking was made. The possible methods are
+	-online
+	-reservation
+	-walkup
+	-waiting list
+	-repeat list
+	-second
+	-reservation-phone
+	-third
+	-fourth
+Note that entries listed such as "second", "third" or "fourth" indicate this was an 
+additional player being booked on one booking.
+
+permit_type: The type of permit that was used for this booking, Possible types are: 
+-Permit
+-Single Play
+-NP (No permit)
+
+action: Indicates if the schedule slot was canceled or rained out at any point.
+
+cancellation_time: Time of cancellation. Note that the schedule slot may have been
+updated once again after the recorded cancellation time.
