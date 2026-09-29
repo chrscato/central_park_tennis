@@ -6,7 +6,7 @@ import { niceTicks, Tooltip, type Tip } from './charts'
 import { useWidth } from './common'
 
 /** Plain horizontal bars with the value written at the end. */
-export function SimpleBars({ items, max, color = 'var(--accent)' }: { items: { label: string; value: number; display: string }[]; max?: number; color?: string }) {
+export function SimpleBars({ items, max, color = 'var(--brand)' }: { items: { label: string; value: number; display: string }[]; max?: number; color?: string }) {
   const m = max ?? Math.max(...items.map((i) => i.value), 1e-9)
   return (
     <div role="list">
@@ -76,7 +76,7 @@ export function PartnerHistogram({ stats, bins, ruleMinutes }: { stats: PartnerS
                     y={yOf(c.n)}
                     width={bw}
                     height={ih - yOf(c.n)}
-                    fill={c.hi <= 0 ? 'var(--red)' : late ? '#d99a3d' : 'var(--accent)'}
+                    fill={c.hi <= 0 ? 'var(--red)' : late ? '#d99a3d' : 'var(--brand)'}
                   />
                   <rect
                     x={i * slot}
@@ -190,7 +190,7 @@ export function DayRain({ weather, date }: { weather: WeatherData; date: string 
     <div className="chart" ref={ref} onMouseLeave={() => setTip(null)}>
       <div className="legend">
         <span className="legend-item">
-          <span className="swatch" style={{ background: 'var(--accent)' }} /> Rain in the hour
+          <span className="swatch" style={{ background: 'var(--rain)' }} /> Rain in the hour
         </span>
         <span className="legend-item">
           <span className="swatch" style={{ background: 'var(--st-rained-out)' }} /> Rained out
@@ -220,9 +220,9 @@ export function DayRain({ weather, date }: { weather: WeatherData; date: string 
               {data.hours.map((h, i) => {
                 const x = i * slot + (slot - bw) / 2
                 if (h.rain == null) return <rect key={h.key} x={x} y={panel - 4} width={bw} height={4} fill="#cfcac0" />
-                if (h.rain <= 0) return h.trace ? <rect key={h.key} x={x} y={panel - 2} width={bw} height={2} fill="var(--accent)" /> : null
+                if (h.rain <= 0) return h.trace ? <rect key={h.key} x={x} y={panel - 2} width={bw} height={2} fill="var(--rain)" /> : null
                 const hh = Math.max(1, panel - y1(Math.min(h.rain, rMax)))
-                return <rect key={h.key} x={x} y={panel - hh} width={bw} height={hh} fill="var(--accent)" />
+                return <rect key={h.key} x={x} y={panel - hh} width={bw} height={hh} fill="var(--rain)" />
               })}
               <line className="axis-line" x1={0} x2={iw} y1={panel} y2={panel} />
               <line x1={12 * slot} x2={12 * slot} y1={-4} y2={panel + gap + panel} stroke="var(--ink)" strokeDasharray="2 3" />

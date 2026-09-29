@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { LoadError, Loading, useAsync, ViewBoundary } from './components/common'
+import { Logo } from './components/Logo'
 import { loadInsights, loadManifest, loadOverview, loadTiming, loadWeather, type Insights as InsightsData } from './lib/data'
 import { longDate } from './lib/format'
 import { href, useLocation, type Route } from './lib/url'
@@ -37,27 +38,32 @@ export default function App() {
 
   return (
     <>
-      <header className="masthead">
-        <div className="brandline">
-          <a className="wordmark" href={href('planner')}>
-            Central Park Tennis Watch
-          </a>
-          <span className="tagline">Independent analysis of NYC Parks FOIL records · not affiliated with NYC Parks</span>
-        </div>
-        <nav className="nav" aria-label="Sections">
-          {NAV.map((n) => (
-            <a key={n.route} href={href(n.route)} aria-current={loc.route === n.route ? 'page' : undefined}>
-              {n.label}
+      <header>
+        <div className="masthead">
+          <div className="brandline">
+            <Logo className="logo" />
+            <a className="wordmark" href={href('planner')}>
+              Central Park Tennis Watch
+              <small>Independent guide built from public records · not affiliated with NYC Parks</small>
             </a>
-          ))}
-        </nav>
+          </div>
+        </div>
+        <div className="navbar">
+          <nav className="nav" aria-label="Sections">
+            {NAV.map((n) => (
+              <a key={n.route} href={href(n.route)} aria-current={loc.route === n.route ? 'page' : undefined}>
+                {n.label}
+              </a>
+            ))}
+          </nav>
+        </div>
         {m && ready && (
           <div className="meta">
             <span>
-              <b>Historical records</b>, not live availability
+              <b>Past records</b>, not live court availability
             </span>
             <span>
-              Outcomes {longDate(m.snapshot.reservation_date_min, false)}–{longDate(ready[1].cards.latest_outcome_date ?? m.snapshot.historical_outcome_cutoff, false)}
+              {longDate(m.snapshot.reservation_date_min, false)}–{longDate(ready[1].cards.latest_outcome_date ?? m.snapshot.historical_outcome_cutoff, false)}
             </span>
             <span>Extraction date {m.source.extraction_time_status}</span>
             <span className="num">Data {m.data_version}</span>
