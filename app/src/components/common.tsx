@@ -1,5 +1,5 @@
 import { Component, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { STATUS_LABEL, STATUSES, type Manifest, type Status } from '../lib/data'
+import { STATUS_LABEL, STATUSES, type Status } from '../lib/data'
 
 export type Async<T> = { status: 'loading' } | { status: 'error'; error: string } | { status: 'ready'; data: T }
 
@@ -41,10 +41,10 @@ export function Swatch({ status }: { status: Status }) {
   return <span className="swatch" style={{ background: statusColor(status) }} aria-hidden="true" />
 }
 
-export function StatusLegend({ includeMissing = false, statuses = STATUSES }: { includeMissing?: boolean; statuses?: readonly Status[] }) {
+export function StatusLegend({ includeMissing = false }: { includeMissing?: boolean }) {
   return (
     <div className="legend" role="list" aria-label="Status legend">
-      {statuses.map((s) => (
+      {STATUSES.map((s) => (
         <span className="legend-item" role="listitem" key={s}>
           <Swatch status={s} />
           {STATUS_LABEL[s]}
@@ -53,9 +53,28 @@ export function StatusLegend({ includeMissing = false, statuses = STATUSES }: { 
       {includeMissing && (
         <span className="legend-item" role="listitem">
           <span className="swatch missing" aria-hidden="true" />
-          Not in this export
+          No record
         </span>
       )}
+    </div>
+  )
+}
+
+export function Group({ title, children, className }: { title: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <fieldset className={`group${className ? ' ' + className : ''}`}>
+      <legend>{title}</legend>
+      {children}
+    </fieldset>
+  )
+}
+
+export function Readout({ label, value, sub, accent, off }: { label: string; value: ReactNode; sub?: ReactNode; accent?: boolean; off?: boolean }) {
+  return (
+    <div className={`readout sunken${off ? ' off' : ''}`}>
+      <div className="k">{label}</div>
+      <div className={`v${accent ? ' accent' : ''}`}>{value}</div>
+      {sub != null && <div className="s">{sub}</div>}
     </div>
   )
 }
@@ -72,8 +91,8 @@ export class ViewBoundary extends Component<{ children: ReactNode; resetKey: str
   render() {
     if (this.state.error)
       return (
-        <div className="callout" role="alert">
-          This view hit an error ({this.state.error}). Other pages still work.
+        <div className="note err" role="alert">
+          This view failed to load: {this.state.error}
         </div>
       )
     return this.props.children
@@ -81,34 +100,17 @@ export class ViewBoundary extends Component<{ children: ReactNode; resetKey: str
 }
 
 export function Loading({ what }: { what: string }) {
-  return <p className="muted" role="status">Loading {what}…</p>
+  return (
+    <p className="muted" role="status">
+      Loading {what}…
+    </p>
+  )
 }
 
 export function LoadError({ error }: { error: string }) {
   return (
-    <div className="callout" role="alert">
-      Could not load data ({error}). Generated assets may be missing — run <code>python -m pipeline.build</code>.
-    </div>
-  )
-}
-
-export function SourceLine({ manifest, children }: { manifest?: Manifest; children?: ReactNode }) {
-  return (
-    <div className="source-line">
-      {children}
-      {children && ' · '}
-      Source: NYC Parks FOIL export{manifest ? ` · data ${manifest.data_version}` : ''} ·{' '}
-      <a href="#/methodology">Methodology</a>
-    </div>
-  )
-}
-
-export function Card({ label, value, note, accent }: { label: string; value: ReactNode; note?: ReactNode; accent?: boolean }) {
-  return (
-    <div className={`card${accent ? ' accent' : ''}`}>
-      <div className="label">{label}</div>
-      <div className="value">{value}</div>
-      {note && <div className="note">{note}</div>}
+    <div className="note err" role="alert">
+      Could not load data ({error}). Run <code>python -m pipeline.build</code>.
     </div>
   )
 }

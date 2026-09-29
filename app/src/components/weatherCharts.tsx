@@ -26,18 +26,18 @@ export function BucketBars({ rows, unitLabel }: { rows: BucketRow[]; unitLabel: 
             const missing = r.bucket === 'missing'
             return (
               <g key={r.bucket}>
-                <text x={0} y={y + bar / 2} dy="0.32em" style={{ fill: 'var(--ink-2)', fontSize: 12 }}>
+                <text x={0} y={y + bar / 2} dy="0.32em" style={{ fontSize: 11 }}>
                   {BUCKET_LABEL[r.bucket]}
                 </text>
-                <rect x={labelW} y={y} width={iw} height={bar} fill="var(--rule-soft)" rx={3} />
+                <rect x={labelW} y={y} width={iw} height={bar} fill="var(--grid)" stroke="var(--rule)" />
                 {w > 0 && (
                   <path
-                    d={topRounded(0, 0, bar, w, 4)}
+                    d={topRounded(0, 0, bar, w, 0)}
                     transform={`translate(${labelW + w},${y}) rotate(90)`}
                     fill={missing ? 'var(--hatch)' : 'var(--st-rained-out)'}
                   />
                 )}
-                <text x={labelW + iw + 8} y={y + bar / 2} dy="0.32em" className="num" style={{ fill: 'var(--ink)', fontWeight: 700, fontSize: 12 }}>
+                <text x={labelW + iw + 8} y={y + bar / 2} dy="0.32em" className="num" style={{ fontWeight: 700, fontSize: 11 }}>
                   {pct(r.share)}
                 </text>
               </g>
@@ -45,8 +45,8 @@ export function BucketBars({ rows, unitLabel }: { rows: BucketRow[]; unitLabel: 
           })}
         </svg>
       )}
-      <div className="table-wrap">
-        <table className="data" style={{ marginTop: 8 }}>
+      <div className="grid-wrap sunken" style={{ marginTop: 8 }}>
+        <table className="dg">
           <thead>
             <tr>
               <th>Rainfall</th>
@@ -147,7 +147,7 @@ export function RainTimeline({
             </pattern>
           </defs>
           <g transform={`translate(${m.l},0)`}>
-            <text x={0} y={10} style={{ fill: 'var(--ink-2)', fontWeight: 700 }}>
+            <text x={0} y={10} style={{ fontWeight: 700 }}>
               Rainfall (inches, Central Park)
             </text>
             <g transform="translate(0,16)">
@@ -164,12 +164,12 @@ export function RainTimeline({
                 if (!d.w || d.w.rain == null) return <rect key={d.date} x={x} y={panelH - 6} width={bw} height={6} fill="url(#hatch-tl)" />
                 if (d.w.rain <= 0) return null
                 const h = Math.max(1, panelH - y1(Math.min(d.w.rain, rainMax)))
-                return <path key={d.date} d={topRounded(x, panelH - h, bw, h, Math.min(4, bw / 2))} fill="var(--seq-5)" />
+                return <path key={d.date} d={topRounded(x, panelH - h, bw, h, 0)} fill="var(--seq-5)" />
               })}
               <line className="axis-line" x1={0} x2={iw} y1={panelH} y2={panelH} />
             </g>
             <g transform={`translate(0,${panelH + gapH})`}>
-              <text x={0} y={-6} style={{ fill: 'var(--ink-2)', fontWeight: 700 }}>
+              <text x={0} y={-6} style={{ fontWeight: 700 }}>
                 Recorded rained-out court-hours
               </text>
               {roTicks.map((v) => (
@@ -185,7 +185,7 @@ export function RainTimeline({
                 if (!v) return null
                 const x = i * slot + (slot - bw) / 2
                 const h = Math.max(1, panelH - y2(v))
-                return <path key={d.date} d={topRounded(x, panelH - h, bw, h, Math.min(4, bw / 2))} fill="var(--st-rained-out)" />
+                return <path key={d.date} d={topRounded(x, panelH - h, bw, h, 0)} fill="var(--st-rained-out)" />
               })}
               <line className="axis-line" x1={0} x2={iw} y1={panelH} y2={panelH} />
               {monthStarts.map(([date, i]) => (

@@ -1,35 +1,23 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { LIGHT_FILLS, LoadError, Loading, SourceLine, StatusLegend, Swatch, statusColor, useAsync } from '../components/common'
+import { Group, LIGHT_FILLS, LoadError, Loading, StatusLegend, Swatch, statusColor, useAsync } from '../components/common'
 import { loadDay, STATUS_CODE, STATUS_LABEL, STATUSES, type Manifest, type Overview, type SlotDetail } from '../lib/data'
-import { hourLabel, longDate, num, shortHour } from '../lib/format'
+import { hourLabel, longDate, num } from '../lib/format'
 import { replaceParams } from '../lib/url'
 import { dayIndex, inches, type WeatherData } from '../lib/weather'
 
 function Counts({ obj }: { obj: Record<string, number> }) {
   const entries = Object.entries(obj)
-  if (!entries.length) return <span className="muted">none recorded</span>
+  if (!entries.length) return <span className="muted">—</span>
   return <>{entries.map(([k, v]) => `${k} (${v})`).join(', ')}</>
 }
 
-export function Courts({
-  manifest,
-  overview,
-  weather,
-  params,
-}: {
-  manifest: Manifest
-  overview: Overview
-  weather: WeatherData
-  params: URLSearchParams
-}) {
+export function Courts({ manifest, overview, weather, params }: { manifest: Manifest; overview: Overview; weather: WeatherData; params: URLSearchParams }) {
   const wxIdx = useMemo(() => (weather.status === 'available' ? dayIndex(weather) : null), [weather])
   const dates = useMemo(() => overview.daily.map((d) => d.date), [overview])
   const requested = params.get('date')
   const fallback = overview.cards.latest_outcome_date ?? dates[dates.length - 1]
   const [date, setDate] = useState(requested && dates.includes(requested) ? requested : fallback)
-  const [notice, setNotice] = useState<string | null>(
-    requested && !dates.includes(requested) ? `No records in this export for ${requested}. Showing ${longDate(fallback)}.` : null,
-  )
+  const [notice, setNotice] = useState<string | null>(requested && !dates.includes(requested) ? `No records for ${requested}.` : null)
   const [selected, setSelected] = useState<string | null>(null)
   const [focus, setFocus] = useState<[number, number]>([0, 0])
   const gridRef = useRef<HTMLTableElement>(null)
@@ -44,9 +32,8 @@ export function Courts({
       setDate(d)
       setNotice(null)
     } else {
-      const next = dates.find((x) => x >= d) ?? dates[dates.length - 1]
-      setNotice(`No records in this export for ${longDate(d)}. Showing the next date with records.`)
-      setDate(next)
+      setNotice(`No records for ${longDate(d, false)}; showing next date with records.`)
+      setDate(dates.find((x) => x >= d) ?? dates[dates.length - 1])
     }
   }
 
@@ -67,6 +54,7 @@ export function Courts({
     return { map, hours, counts }
   }, [day])
 
+  // Rows = start hours, columns = courts.
   const onKey = (e: KeyboardEvent) => {
     if (!grid) return
     const [r, c] = focus
@@ -76,109 +64,85 @@ export function Courts({
       ArrowLeft: [r, c - 1],
       ArrowRight: [r, c + 1],
       Home: [r, 0],
-      End: [r, grid.hours.length - 1],
+      End: [r, courts.length - 1],
     }
     const next = moves[e.key]
     if (!next) return
     e.preventDefault()
-    const nr = Math.max(0, Math.min(courts.length - 1, next[0]))
-    const nc = Math.max(0, Math.min(grid.hours.length - 1, next[1]))
+    const nr = Math.max(0, Math.min(grid.hours.length - 1, next[0]))
+    const nc = Math.max(0, Math.min(courts.length - 1, next[1]))
     setFocus([nr, nc])
     gridRef.current?.querySelector<HTMLButtonElement>(`[data-rc="${nr}-${nc}"]`)?.focus()
   }
 
   const sel = selected && grid ? grid.map.get(selected) : undefined
-  const dayWx = wxIdx?.get(date)
   const [selCourt, selHour] = selected ? selected.split('|').map(Number) : [0, 0]
+  const dayWx = wxIdx?.get(date)
+  const hourRain = (h: number) => day.status === 'ready' ? day.data.weather?.find((x) => x.hour === h) : undefined
 
   return (
     <>
-      <section className="hero">
-        <div className="kicker">Court explorer</div>
-        <h1>Follow the records.</h1>
-        <p className="lede">
-          Every recorded slot for one date: {overview.cards.courts} courts by hour. Select a cell for its sanitized record. Hatched
-          cells have no record in this export.
-        </p>
-      </section>
+      <div className="row" style={{ marginBottom: 8 }}>
+        <button className="btn" type="button" disabled={idx <= 0} onClick={() => go(dates[idx - 1])}>
+          ◄ Prev
+        </button>
+        <input type="date" aria-label="Date" value={date} min={dates[0]} max={dates[dates.length - 1]} onChange={(e) => e.target.value && go(e.target.value)} />
+        <button className="btn" type="button" disabled={idx >= dates.length - 1} onClick={() => go(dates[idx + 1])}>
+          Next ►
+        </button>
+        <b style={{ marginLeft: 6 }}>{longDate(date)}</b>
+        {day.status === 'ready' && day.data.post_cutoff && <span className="note" style={{ margin: 0 }}>After snapshot cutoff — status not final</span>}
+      </div>
+      {notice && <div className="note">{notice}</div>}
+      <StatusLegend includeMissing />
 
-      <section className="panel">
-        <div className="court-toolbar">
-          <button className="btn" type="button" disabled={idx <= 0} onClick={() => go(dates[idx - 1])} aria-label="Previous date with records">
-            ← Prev
-          </button>
-          <label className="small" style={{ fontWeight: 700 }}>
-            <span className="sr-only">Date</span>
-            <input type="date" value={date} min={dates[0]} max={dates[dates.length - 1]} onChange={(e) => e.target.value && go(e.target.value)} />
-          </label>
-          <button className="btn" type="button" disabled={idx >= dates.length - 1} onClick={() => go(dates[idx + 1])} aria-label="Next date with records">
-            Next →
-          </button>
-          <strong style={{ marginLeft: 8 }}>{longDate(date)}</strong>
-        </div>
-        {notice && <div className="callout" role="status">{notice}</div>}
-        {day.status === 'ready' && day.data.post_cutoff && (
-          <div className="callout">
-            This date is on or after the snapshot cutoff ({manifest.snapshot.historical_outcome_cutoff}). Statuses show the state at
-            export time and are not completed outcomes.
-          </div>
-        )}
-        <StatusLegend includeMissing />
-        {day.status === 'loading' && <Loading what="court records" />}
-        {day.status === 'error' && <LoadError error={day.error} />}
-        {grid && day.status === 'ready' && (
-          <div className="court-layout">
-            <div className="table-wrap">
-              <table className="court-grid" ref={gridRef} onKeyDown={onKey} aria-label={`Recorded slots on ${longDate(date)}; rows are courts, columns are start hours`}>
-                <thead>
-                  <tr>
-                    <th scope="col">Court</th>
-                    {grid.hours.map((h) => (
-                      <th scope="col" key={h} abbr={hourLabel(h)}>
-                        {shortHour(h)}
-                      </th>
-                    ))}
-                  </tr>
+      {day.status === 'loading' && <Loading what="court records" />}
+      {day.status === 'error' && <LoadError error={day.error} />}
+      {grid && day.status === 'ready' && (
+        <div className="split right">
+          <div className="grid-wrap tall sunken">
+            <table className="court-grid" ref={gridRef} onKeyDown={onKey} aria-label={`Recorded slots on ${longDate(date)}; rows are start times, columns are courts`}>
+              <thead>
+                <tr>
+                  <th scope="col">Start</th>
                   {day.data.weather && (
-                    <tr>
-                      <th scope="row" title="Central Park hourly gauge, observation ending :51 of each hour">
-                        Rain
-                      </th>
-                      {grid.hours.map((h) => {
-                        const obs = day.data.weather!.find((x) => x.hour === h)
-                        const v = obs?.rain_in
-                        const label = v == null ? 'no data' : v > 0 ? `${v.toFixed(2)}"` : obs?.trace ? 'T' : '0'
-                        return (
-                          <td key={h} title={`${hourLabel(h)}: ${v == null ? 'no rainfall data' : v > 0 ? `${v.toFixed(2)} in` : obs?.trace ? 'trace' : 'none measured'}`}>
-                            <span
-                              className="rain-cell"
-                              style={{ background: v ? `color-mix(in srgb, var(--seq-5) ${Math.min(100, 25 + v * 300)}%, transparent)` : undefined }}
-                            >
-                              {v == null ? '·' : label.replace('0.', '.')}
-                            </span>
-                          </td>
-                        )
-                      })}
-                    </tr>
+                    <th scope="col" title="Central Park rain gauge, hour ending :51">
+                      Rain
+                    </th>
                   )}
-                </thead>
-                <tbody>
-                  {courts.map((c, r) => (
-                    <tr key={c}>
-                      <th scope="row">{c}</th>
-                      {grid.hours.map((h, ci) => {
+                  {courts.map((c) => (
+                    <th scope="col" key={c} abbr={`Court ${c}`}>
+                      {c}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {grid.hours.map((h, r) => {
+                  const obs = hourRain(h)
+                  const v = obs?.rain_in
+                  return (
+                    <tr key={h}>
+                      <th scope="row">{hourLabel(h)}</th>
+                      {day.data.weather && (
+                        <td title={v == null ? 'No rain data' : `${v.toFixed(2)} in`}>
+                          <span className="rain-cell" style={v ? { background: `rgba(10,36,106,${Math.min(0.9, 0.2 + v * 3)})`, color: v > 0.1 ? '#fff' : '#000' } : undefined}>
+                            {v == null ? '·' : v > 0 ? v.toFixed(2).replace(/^0/, '') : obs?.trace ? 'T' : '0'}
+                          </span>
+                        </td>
+                      )}
+                      {courts.map((c, ci) => {
                         const s = grid.map.get(`${c}|${h}`)
                         const key = `${c}|${h}`
-                        const isFocus = focus[0] === r && focus[1] === ci
                         const label = s
-                          ? `Court ${c}, ${hourLabel(h)}: ${STATUS_LABEL[s.status]}${s.walkup ? `, walkup entry ${s.walkup.time}` : ''}`
-                          : `Court ${c}, ${hourLabel(h)}: no record in this export`
+                          ? `Court ${c}, ${hourLabel(h)}: ${STATUS_LABEL[s.status]}${s.walkup ? `, walkup booked ${s.walkup.time}` : ''}`
+                          : `Court ${c}, ${hourLabel(h)}: no record`
                         return (
-                          <td key={h}>
+                          <td key={c}>
                             <button
                               type="button"
                               data-rc={`${r}-${ci}`}
-                              tabIndex={isFocus ? 0 : -1}
+                              tabIndex={focus[0] === r && focus[1] === ci ? 0 : -1}
                               className={`cell${s ? (LIGHT_FILLS.has(s.status) ? ' light-fill' : '') : ' missing'}`}
                               style={s ? { background: statusColor(s.status) } : undefined}
                               aria-label={label}
@@ -187,134 +151,133 @@ export function Courts({
                               onFocus={() => setFocus([r, ci])}
                               onClick={() => setSelected(selected === key ? null : key)}
                             >
-                              {s ? STATUS_CODE[s.status] : '—'}
+                              {s ? STATUS_CODE[s.status] : ''}
                             </button>
                           </td>
                         )
                       })}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <p className="small muted">Arrow keys move between cells; Enter selects.</p>
-            </div>
-
-            <aside className="panel detail" aria-live="polite" style={{ marginBottom: 0 }}>
-              {!selected ? (
-                <>
-                  <h3>Day summary</h3>
-                  <dl>
-                    <dt>Recorded court-hours</dt>
-                    <dd className="num">{num(day.data.slots.length)}</dd>
-                    {STATUSES.map((s) => (
-                      <FragmentRow key={s} label={STATUS_LABEL[s]} value={num(grid.counts[s])} status={s} />
-                    ))}
-                    <dt>With a qualifying walkup entry</dt>
-                    <dd className="num">{num(day.data.slots.filter((s) => s.walkup).length)}</dd>
-                  </dl>
-                  {dayWx && (
-                    <>
-                      <h3>Central Park rainfall</h3>
-                      <dl>
-                        <dt>This day</dt>
-                        <dd>{inches(dayWx.rain, dayWx.trace)}</dd>
-                        <dt>Day before</dt>
-                        <dd>{inches(dayWx.prev1, dayWx.prev1Trace)}</dd>
-                        <dt>2 days before</dt>
-                        <dd>{inches(dayWx.trail2, dayWx.trail2Trace)}</dd>
-                        <dt>3 days before</dt>
-                        <dd>{inches(dayWx.trail3, dayWx.trail3Trace)}</dd>
-                        {dayWx.tmax != null && (
-                          <>
-                            <dt>High</dt>
-                            <dd>{Math.round(dayWx.tmax)}°F</dd>
-                          </>
-                        )}
-                      </dl>
-                    </>
-                  )}
-                  <p className="small muted">Select a cell to see its record.</p>
-                </>
-              ) : !sel ? (
-                <>
-                  <h3>
-                    Court {selCourt}, {hourLabel(selHour)}
-                  </h3>
-                  <p>No record for this court and hour in this export.</p>
-                  <p className="small muted">That does not mean the court was open, closed, available, or unused.</p>
-                </>
-              ) : (
-                <>
-                  <h3>
-                    Court {sel.court}, {hourLabel(sel.hour)}
-                  </h3>
-                  <dl>
-                    <dt>Recorded status</dt>
-                    <dd>
-                      <span className="pill">
-                        <Swatch status={sel.status} /> {STATUS_LABEL[sel.status]}
-                      </span>
-                    </dd>
-                    <dt>Slot ID</dt>
-                    <dd className="num">{sel.id}</dd>
-                    <dt>Export rows</dt>
-                    <dd>
-                      {sel.rows} <span className="muted small">(rows, not people or bookings)</span>
-                    </dd>
-                    <dt>Methods observed</dt>
-                    <dd>
-                      <Counts obj={sel.methods} />
-                    </dd>
-                    <dt>Player statuses</dt>
-                    <dd>
-                      <Counts obj={sel.player_statuses} />
-                    </dd>
-                    <dt>Permit types</dt>
-                    <dd>
-                      <Counts obj={sel.permits} />
-                    </dd>
-                    <dt>Recorded actions</dt>
-                    <dd>
-                      <Counts obj={sel.actions} />
-                    </dd>
-                    <dt>Qualifying walkup entry</dt>
-                    <dd>
-                      {sel.walkup ? (
-                        <>
-                          {sel.walkup.time} <span className="muted small">({Math.round(sel.walkup.lead_minutes)} min before start)</span>
-                        </>
-                      ) : (
-                        <span className="muted">none</span>
-                      )}
-                    </dd>
-                  </dl>
-                  {Object.keys(sel.actions).length > 0 && (
-                    <p className="small muted">
-                      Cancellation and rebooking actions are listed as recorded. How they relate to each player record is ambiguous in
-                      the export, so no timeline is shown.
-                    </p>
-                  )}
-                  <p className="small muted">Staff notes are withheld from public views pending review.</p>
-                </>
-              )}
-            </aside>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-        )}
-        <SourceLine manifest={manifest}>{`Date partition slots/${date}.json`}</SourceLine>
-      </section>
-    </>
-  )
-}
 
-function FragmentRow({ label, value, status }: { label: string; value: string; status: (typeof STATUSES)[number] }) {
-  return (
-    <>
-      <dt>
-        <span className="pill" style={{ fontWeight: 400 }}>
-          <Swatch status={status} /> {label}
-        </span>
-      </dt>
-      <dd className="num">{value}</dd>
+          <aside aria-live="polite">
+            {!selected ? (
+              <Group title="Day summary">
+                <table className="kv">
+                  <tbody>
+                    <tr>
+                      <th>Court-hours</th>
+                      <td className="num">{num(day.data.slots.length)}</td>
+                    </tr>
+                    {STATUSES.map((s) => (
+                      <tr key={s}>
+                        <th>
+                          <Swatch status={s} /> {STATUS_LABEL[s]}
+                        </th>
+                        <td className="num">{num(grid.counts[s])}</td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <th>Walkup bookings</th>
+                      <td className="num">{num(day.data.slots.filter((s) => s.walkup).length)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </Group>
+            ) : (
+              <Group title={`Court ${sel?.court ?? selCourt} · ${hourLabel(sel?.hour ?? selHour)}`}>
+                {!sel ? (
+                  <p>No record in this export.</p>
+                ) : (
+                  <table className="kv">
+                    <tbody>
+                      <tr>
+                        <th>Status</th>
+                        <td>
+                          <Swatch status={sel.status} /> {STATUS_LABEL[sel.status]}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Slot ID</th>
+                        <td className="num">{sel.id}</td>
+                      </tr>
+                      <tr>
+                        <th>Export rows</th>
+                        <td>{sel.rows}</td>
+                      </tr>
+                      <tr>
+                        <th>Methods</th>
+                        <td style={{ whiteSpace: 'normal' }}>
+                          <Counts obj={sel.methods} />
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Player status</th>
+                        <td style={{ whiteSpace: 'normal' }}>
+                          <Counts obj={sel.player_statuses} />
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Permits</th>
+                        <td>
+                          <Counts obj={sel.permits} />
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Actions</th>
+                        <td style={{ whiteSpace: 'normal' }}>
+                          <Counts obj={sel.actions} />
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Walkup booked</th>
+                        <td>{sel.walkup ? `${sel.walkup.time} (${Math.round(sel.walkup.lead_minutes)} min before)` : '—'}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+                <button className="btn small" type="button" style={{ marginTop: 6 }} onClick={() => setSelected(null)}>
+                  Close
+                </button>
+              </Group>
+            )}
+            {dayWx && (
+              <Group title="Rain (Central Park)">
+                <table className="kv">
+                  <tbody>
+                    <tr>
+                      <th>This day</th>
+                      <td>{inches(dayWx.rain, dayWx.trace)}</td>
+                    </tr>
+                    <tr>
+                      <th>Day before</th>
+                      <td>{inches(dayWx.prev1, dayWx.prev1Trace)}</td>
+                    </tr>
+                    <tr>
+                      <th>2 days before</th>
+                      <td>{inches(dayWx.trail2, dayWx.trail2Trace)}</td>
+                    </tr>
+                    <tr>
+                      <th>3 days before</th>
+                      <td>{inches(dayWx.trail3, dayWx.trail3Trace)}</td>
+                    </tr>
+                    {dayWx.tmax != null && (
+                      <tr>
+                        <th>High</th>
+                        <td>{Math.round(dayWx.tmax)}°F</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </Group>
+            )}
+            <div className="foot">Blank = no record in export, which is not the same as a closed court. Staff notes withheld. Data {manifest.data_version}.</div>
+          </aside>
+        </div>
+      )}
     </>
   )
 }

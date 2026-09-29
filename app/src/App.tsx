@@ -3,122 +3,94 @@ import { LoadError, Loading, useAsync, ViewBoundary } from './components/common'
 import { loadManifest, loadOverview, loadTiming, loadWeather } from './lib/data'
 import { longDate } from './lib/format'
 import { href, useLocation, type Route } from './lib/url'
+import type { WeatherData } from './lib/weather'
 import { Courts } from './views/Courts'
 import { Methodology } from './views/Methodology'
 import { Outlook } from './views/Outlook'
-import { Overview } from './views/Overview'
 import { Planner } from './views/Planner'
 import { Weather } from './views/Weather'
 
 const NAV: { route: Route; label: string }[] = [
-  { route: 'overview', label: 'Overview' },
-  { route: 'planner', label: 'Walkup planner' },
-  { route: 'outlook', label: 'Rain outlook' },
-  { route: 'courts', label: 'Court records' },
+  { route: 'planner', label: 'Booking Times' },
+  { route: 'outlook', label: 'Rain Outlook' },
+  { route: 'courts', label: 'Court Records' },
   { route: 'weather', label: 'Weather' },
-  { route: 'methodology', label: 'FOIL & methodology' },
+  { route: 'methodology', label: 'Methodology' },
 ]
+
+const UNAVAILABLE: WeatherData = { status: 'unavailable', reason: 'weather.json not found' } as WeatherData
 
 export default function App() {
   const loc = useLocation()
-  const data = useAsync(() => Promise.all([loadManifest(), loadOverview(), loadTiming(), loadWeather().catch(() => ({ status: 'unavailable' as const, reason: 'weather.json not found' }) as never)]), [])
+  const data = useAsync(() => Promise.all([loadManifest(), loadOverview(), loadTiming(), loadWeather().catch(() => UNAVAILABLE)]), [])
+  const label = NAV.find((n) => n.route === loc.route)?.label ?? ''
 
   useEffect(() => {
     window.scrollTo(0, 0)
-    const label = NAV.find((n) => n.route === loc.route)?.label
-    document.title = `${label} · Central Park Tennis Watch`
-  }, [loc.route])
+    document.title = `${label} - Central Park Tennis Watch`
+  }, [label])
 
-  const manifest = data.status === 'ready' ? data.data[0] : undefined
-  const latestOutcome = data.status === 'ready' ? data.data[1].cards.latest_outcome_date : null
+  const ready = data.status === 'ready' ? data.data : null
+  const m = ready?.[0]
 
   return (
-    <>
-      <header className="masthead">
-        <div className="masthead-inner">
-          <div className="brand">
-            <a href={href('overview')} className="brand-name">
-              Central Park <span>Tennis</span> Watch
+    <div className="desktop">
+      <div className="window raised">
+        <div className="titlebar">
+          <span className="app-icon" aria-hidden="true" />
+          <span className="title">Central Park Tennis Watch - [{label}]</span>
+          <span className="ver">v0.1 · Independent · not affiliated with NYC Parks</span>
+          <span className="wbtn raised" aria-hidden="true">_</span>
+          <span className="wbtn raised" aria-hidden="true">□</span>
+          <span className="wbtn raised" aria-hidden="true">×</span>
+        </div>
+
+        <nav className="tabs" aria-label="Sections">
+          {NAV.map((n) => (
+            <a key={n.route} href={href(n.route)} aria-current={loc.route === n.route ? 'page' : undefined}>
+              {n.label}
             </a>
-            <span className="brand-tag">Independent. Not affiliated with NYC Parks or any government agency or party.</span>
-          </div>
-          <nav className="nav" aria-label="Sections">
-            {NAV.map((n) => (
-              <a key={n.route} href={href(n.route)} aria-current={loc.route === n.route ? 'page' : undefined}>
-                {n.label}
-              </a>
-            ))}
-          </nav>
-        </div>
-      </header>
+          ))}
+        </nav>
 
-      {manifest && (
-        <div className="banner" role="note">
-          <span>
-            <span className="tag">Historical</span>
-            <strong>Records, not live availability.</strong>
-          </span>
-          <span>
-            Reservation outcomes {longDate(manifest.snapshot.reservation_date_min, false)} –{' '}
-            {latestOutcome ? longDate(latestOutcome, false) : '—'} (cutoff {manifest.snapshot.historical_outcome_cutoff})
-          </span>
-          <span>
-            Extraction date: <strong>{manifest.source.extraction_time_status}</strong> (latest activity{' '}
-            {manifest.snapshot.latest_activity.slice(0, 10)})
-          </span>
-          <a href={href('methodology')}>Data {manifest.data_version}</a>
-        </div>
-      )}
+        <main className="tabpanel raised">
+          {loc.invalid && <div className="note">Unknown page; showing Booking Times.</div>}
+          {data.status === 'loading' && <Loading what="records" />}
+          {data.status === 'error' && <LoadError error={data.error} />}
+          {ready && (
+            <ViewBoundary resetKey={loc.route}>
+              {(() => {
+                const [manifest, ov, t, w] = ready
+                switch (loc.route) {
+                  case 'outlook':
+                    return <Outlook manifest={manifest} timing={t} weather={w} />
+                  case 'courts':
+                    return <Courts manifest={manifest} overview={ov} weather={w} params={loc.params} />
+                  case 'weather':
+                    return <Weather manifest={manifest} overview={ov} weather={w} />
+                  case 'methodology':
+                    return <Methodology manifest={manifest} />
+                  default:
+                    return <Planner key="planner" manifest={manifest} timing={t} weather={w} params={loc.params} />
+                }
+              })()}
+            </ViewBoundary>
+          )}
+        </main>
 
-      <main id="main">
-        {loc.invalid && (
-          <div className="callout" role="alert">
-            That page doesn’t exist. Showing the overview.
-          </div>
-        )}
-        {data.status === 'loading' && <Loading what="records" />}
-        {data.status === 'error' && <LoadError error={data.error} />}
-        {data.status === 'ready' && (
-          <ViewBoundary resetKey={loc.route}>
-          {(() => {
-            const [m, ov, t, w] = data.data
-            switch (loc.route) {
-              case 'planner':
-                return <Planner key="planner" manifest={m} timing={t} weather={w} params={loc.params} />
-              case 'outlook':
-                return <Outlook manifest={m} timing={t} weather={w} />
-              case 'courts':
-                return <Courts manifest={m} overview={ov} weather={w} params={loc.params} />
-              case 'weather':
-                return <Weather manifest={m} overview={ov} weather={w} />
-              case 'methodology':
-                return <Methodology manifest={m} />
-              default:
-                return <Overview manifest={m} overview={ov} timing={t} weather={w} />
-            }
-          })()}
-          </ViewBoundary>
-        )}
-      </main>
-
-      <footer className="footer">
-        <div className="footer-inner">
-          <p>
-            Central Park Tennis Watch is an independent project built from public records obtained under New York’s Freedom of
-            Information Law. It is not affiliated with, endorsed by, or speaking for NYC Parks, the City of New York, or any
-            political party or government entity.
-          </p>
-          <p>
-            Historical records only. Nothing here predicts or guarantees court availability.{' '}
-            {manifest && (
-              <>
-                Data {manifest.data_version} · built {manifest.built_at_utc.slice(0, 10)} ·{' '}
-              </>
-            )}
-            <a href={href('methodology')}>Methodology & corrections</a>
-          </p>
-        </div>
-      </footer>
-    </>
+        <footer className="statusbar">
+          <span className="sunken grow">Historical records (FOIL) — not live court availability</span>
+          {m && (
+            <>
+              <span className="sunken">
+                Outcomes {longDate(m.snapshot.reservation_date_min, false)}–{longDate(ready![1].cards.latest_outcome_date ?? m.snapshot.historical_outcome_cutoff, false)}
+              </span>
+              <span className="sunken">Extraction date: {m.source.extraction_time_status}</span>
+              <span className="sunken num">{m.data_version}</span>
+            </>
+          )}
+        </footer>
+      </div>
+    </div>
   )
 }

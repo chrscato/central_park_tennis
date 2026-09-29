@@ -44,12 +44,13 @@ Input paths, the historical cutoff, timezone, and weather units are set in `conf
 
 ## What's in the draft
 
-- **Overview**: recorded court-hours, recorded checked-in and rained-out shares (with denominators), weekly status composition, coverage calendar with missing dates visible, and evidence cards.
-- **Walkup planner**: month / weekday / season / slot-hour filters (default: April, Wednesday, 5–6 p.m.), plus a weather filter for the day(s) before. Shows pooled and day-weighted percentiles, daily booking curves with median and IQR band, a histogram, and a per-date table. The optional planning benchmark is suppressed below 10 dates. Also includes an alarm calculator and a shareable URL (travel details only if opted in).
-- **Rain outlook**: pulls yesterday's and today's rainfall live from the NWS feed for the Central Park gauge (or takes a manual value). For comparable past days, it shows the recorded rained-out share by start hour, when recorded play resumed, and how often mornings were washed out. It also shows how much earlier afternoon/evening walkups were booked on late-opening days (e.g. 1–4 p.m. slots: ~72 min earlier on weekdays).
-- **Court explorer**: 26-court × hour grid per date with text status codes, an hourly rainfall strip, same-day/previous-day/2-/3-day rainfall, hatched "not in export" cells, keyboard navigation, and sanitized slot details.
+The UI is a classic desktop-application layout (Win2000-era chrome: title bar, tabs, group boxes, sunken data grids, status bar). Tabs:
+
+- **Booking Times** (default): query pane (month, day, court start time, season, rain before, late-opening mornings) → readouts, daily booking curves, bookings-per-15-min histogram, benchmark + alarm calculator, and a per-date grid. The benchmark is suppressed below 10 dates. Filters are encoded in the URL (travel times only if opted in).
+- **Rain Outlook**: pulls yesterday's and today's rainfall live from the NWS feed for the Central Park gauge (or takes a manual value). For comparable past days, it shows the recorded rained-out share by start hour, when recorded play resumed, and how often mornings were washed out. It also shows how much earlier afternoon/evening walkups were booked on late-opening days (e.g. 1–4 p.m. slots: ~72 min earlier on weekdays).
+- **Court Records**: per-date grid with start times down the side and courts 1–26 across with text status codes, an hourly rainfall strip, same-day/previous-day/2-/3-day rainfall, hatched "not in export" cells, keyboard navigation, and sanitized slot details.
 - **Weather**: rained-out share by rainfall bucket for the same day, previous day, 2 and 3 days before, and during / 3h / 6h / 24h before the slot. Also a daily rain vs. rain-out timeline, rain-outs on measured-dry days (as leads, not findings), and source checks.
-- **FOIL & methodology**: checksums, cutoff and timezone assumptions, reconciliation with earlier figures, exclusion ledgers, downloads, what the records cannot answer, records still needed, and a change log.
+- **Methodology**: checksums, cutoff and timezone assumptions, reconciliation with earlier figures, exclusion ledgers, downloads, what the records cannot answer, records still needed, and a change log.
 
 ## Verified against earlier analysis
 

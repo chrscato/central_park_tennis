@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Card, SourceLine } from '../components/common'
+import { Group, Readout } from '../components/common'
 import { BucketBars, RainTimeline } from '../components/weatherCharts'
 import type { Manifest, Overview } from '../lib/data'
 import { longDate, num, pct } from '../lib/format'
+import { href } from '../lib/url'
 import {
   DAILY_WINDOW_LABEL,
   dayIndex,
@@ -26,156 +27,106 @@ export function Weather({ manifest, overview, weather }: { manifest: Manifest; o
   const [year, setYear] = useState(years[years.length - 1])
   const idx = useMemo(() => (weather.status === 'available' ? dayIndex(weather) : new Map()), [weather])
 
-  if (weather.status !== 'available') {
-    return (
-      <>
-        <section className="hero">
-          <div className="kicker">Weather and recorded disruption</div>
-          <h1>Rain versus rain-outs.</h1>
-        </section>
-        <div className="callout" role="status">
-          Weather data is unavailable in this build{weather.reason ? ` (${weather.reason})` : ''}. The rest of the site is unaffected.
-        </div>
-      </>
-    )
-  }
+  if (weather.status !== 'available') return <div className="note">No weather data in this build{weather.reason ? `: ${weather.reason}` : ''}.</div>
 
   const isDaily = (DAILY as string[]).includes(win)
   const rows = isDaily ? rainoutByDailyBucket(weather, overview.daily, win as DailyWindow) : rainoutByHourlyBucket(weather, win as HourlyWindow)
   const leads = dryDayRainouts(weather, overview.daily)
   const cov = weather.coverage
   const rc = weather.reconciliation
-  const dryRow = rows.find((r) => r.bucket === 'dry')
-  const wetRows = rows.filter((r) => r.bucket === 'moderate' || r.bucket === 'heavy')
-  const wetShare = wetRows.reduce((a, r) => a + r.rainedOut, 0) / Math.max(1, wetRows.reduce((a, r) => a + r.recorded, 0))
-  const label = isDaily ? DAILY_WINDOW_LABEL[win as DailyWindow] : HOURLY_WINDOW_LABEL[win as HourlyWindow]
+  const prev = rainoutByDailyBucket(weather, overview.daily, 'prev1')
+  const wet = prev.filter((r) => r.bucket === 'moderate' || r.bucket === 'heavy')
+  const wetShare = wet.reduce((a, r) => a + r.rainedOut, 0) / Math.max(1, wet.reduce((a, r) => a + r.recorded, 0))
 
   return (
     <>
-      <section className="hero">
-        <div className="kicker">Weather and recorded disruption</div>
-        <h1>Rain versus rain-outs.</h1>
-        <p className="lede">
-          Central Park rain gauge readings set against recorded “rained out” court-hours — on the day, the day before, and the days
-          leading up. A comparison of records, not a finding about why any court closed.
-        </p>
-      </section>
-
-      <div className="cards">
-        <Card accent label="Days with rainfall data" value={`${num(cov.days_covered)} / ${num(cov.days_total)}`} note={`${cov.daily_start} – ${cov.daily_end}; missing days stay missing`} />
-        <Card label="Rained-out share after a dry day" value={pct(rainoutByDailyBucket(weather, overview.daily, 'prev1').find((r) => r.bucket === 'dry')?.share)} note="Previous day measured 0.00&quot;, no trace" />
-        <Card label="…after 0.10&quot;+ the day before" value={pct(sharePrevWet(weather, overview))} note="Share of recorded court-hours" />
-        <Card label="Hourly vs. daily gauge agreement" value={pct(rc.dry_wet_agreement, 1)} note={`Dry/wet agreement over ${num(rc.complete_days_compared)} complete days`} />
+      <div className="readouts" style={{ marginBottom: 8 }}>
+        <Readout label="Rained out after dry day" value={pct(prev.find((r) => r.bucket === 'dry')?.share)} accent sub="Previous day 0.00&quot;" />
+        <Readout label={'Rained out after 0.10"+'} value={pct(wetShare)} accent sub="Previous day" />
+        <Readout label="Days with rain data" value={`${num(cov.days_covered)}/${num(cov.days_total)}`} sub={`${longDate(cov.daily_start, false)}–${longDate(cov.daily_end, false)}`} />
+        <Readout label="Gauge cross-check" value={pct(rc.wet_within_0_03_in, 0)} sub={`wet days within 0.03" (n=${num(rc.wet_days)})`} />
       </div>
 
-      <section className="panel" aria-labelledby="bk-h">
-        <h2 id="bk-h">Recorded rain-out share by rainfall</h2>
-        <p className="sub">
-          Share of recorded court-hours with status “rained out,” grouped by rainfall in the chosen window. Trailing windows exclude
-          the day itself. Missing weather is its own group, never counted as dry.
-        </p>
-        <div className="controls" style={{ marginBottom: 12 }}>
-          <fieldset>
-            <legend>By day (Central Park daily total)</legend>
-            <div className="chips">
-              {DAILY.map((w) => (
-                <label className="chip" key={w}>
-                  <input type="radio" name="win" checked={win === w} onChange={() => setWin(w)} />
-                  <span>{DAILY_WINDOW_LABEL[w]}</span>
-                </label>
-              ))}
+      <div className="split">
+        <aside>
+          <Group title="Rain window">
+            <div className="small" style={{ marginBottom: 2 }}>
+              <b>Daily total</b>
             </div>
-          </fieldset>
-          <fieldset>
-            <legend>By slot hour (hourly gauge)</legend>
-            <div className="chips">
-              {HOURLY.map((w) => (
-                <label className="chip" key={w}>
-                  <input type="radio" name="win" checked={win === w} onChange={() => setWin(w)} />
-                  <span>{HOURLY_WINDOW_LABEL[w]}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        </div>
-        <p className="statement" style={{ fontSize: '1rem' }}>
-          {label}: when it was dry, {pct(dryRow?.share)} of recorded court-hours were rained out; with 0.10&quot; or more,{' '}
-          {pct(wetShare)}.
-        </p>
-        <BucketBars rows={rows} unitLabel={isDaily ? 'Dates' : 'Date-hours'} />
-        <SourceLine manifest={manifest}>
-          {`${weather.definitions[isDaily ? (win === 'same' ? 'same_day' : win) : win === 'during' ? 'during' : 'prevNh']} · reservation dates before ${manifest.snapshot.historical_outcome_cutoff}`}
-        </SourceLine>
-      </section>
-
-      <section className="panel" aria-labelledby="tl-h">
-        <h2 id="tl-h">Day by day</h2>
-        <div className="court-toolbar">
-          <div className="chips" role="radiogroup" aria-label="Season">
-            {years.map((y) => (
-              <label className="chip" key={y}>
-                <input type="radio" name="yr" checked={year === y} onChange={() => setYear(y)} />
-                <span>{y}</span>
+            {DAILY.map((w) => (
+              <label className="check" key={w}>
+                <input type="radio" name="win" checked={win === w} onChange={() => setWin(w)} />
+                {DAILY_WINDOW_LABEL[w]}
               </label>
             ))}
-          </div>
-          <span className="legend-item small">
-            <span className="swatch missing" /> No rainfall data
-          </span>
+            <div className="small" style={{ margin: '6px 0 2px' }}>
+              <b>Hourly (per court-hour)</b>
+            </div>
+            {HOURLY.map((w) => (
+              <label className="check" key={w}>
+                <input type="radio" name="win" checked={win === w} onChange={() => setWin(w)} />
+                {HOURLY_WINDOW_LABEL[w]}
+              </label>
+            ))}
+          </Group>
+        </aside>
+        <Group title={`Share of court-hours rained out, by rain — ${isDaily ? DAILY_WINDOW_LABEL[win as DailyWindow] : HOURLY_WINDOW_LABEL[win as HourlyWindow]}`}>
+          <BucketBars rows={rows} unitLabel={isDaily ? 'Dates' : 'Date-hours'} />
+        </Group>
+      </div>
+
+      <Group title="Daily rain vs. rained-out court-hours">
+        <div className="row" style={{ marginBottom: 4 }}>
+          {years.map((y) => (
+            <label className="check" key={y} style={{ marginRight: 8 }}>
+              <input type="radio" name="yr" checked={year === y} onChange={() => setYear(y)} />
+              {y}
+            </label>
+          ))}
         </div>
-        <RainTimeline year={year} weather={idx} daily={overview.daily} />
-        <SourceLine manifest={manifest}>Two charts share the date axis; each has its own scale.</SourceLine>
-      </section>
+        <div className="chart-frame sunken">
+          <RainTimeline year={year} weather={idx} daily={overview.daily} />
+        </div>
+      </Group>
 
-      <section className="panel" aria-labelledby="ld-h">
-        <h2 id="ld-h">Rain-outs recorded on measured-dry days</h2>
-        <p className="sub">
-          Dates with rained-out records although the gauge measured 0.00&quot; with no trace on the day and the day before. These are
-          leads to look into, not proof of an error: wet courts after earlier storms, local showers the gauge missed, maintenance,
-          or recording practices can explain them.
-        </p>
-        {leads.length === 0 ? (
-          <p>None in this export.</p>
-        ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th className="n">Rained out</th>
-                  <th className="n">Recorded court-hours</th>
-                  <th className="n">Rain 3 days before</th>
-                  <th>Records</th>
+      <Group title={`Rain-outs on measured-dry days (${num(leads.length)}) — day and day before 0.00"`}>
+        <div className="grid-wrap sunken">
+          <table className="dg">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th className="n">Rained out</th>
+                <th className="n">Court-hours</th>
+                <th className="n">Rain 3 days before</th>
+                <th>Grid</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leads.map((l) => (
+                <tr key={l.date}>
+                  <td>{longDate(l.date)}</td>
+                  <td className="n">{num(l.rainedOut)}</td>
+                  <td className="n">{num(l.recorded)}</td>
+                  <td className="n">{inches(l.trail3, l.trail3Trace)}</td>
+                  <td>
+                    <a href={href('courts', { date: l.date })}>Open</a>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {leads.map((l) => (
-                  <tr key={l.date}>
-                    <td>{longDate(l.date)}</td>
-                    <td className="n">{num(l.rainedOut)}</td>
-                    <td className="n">{num(l.recorded)}</td>
-                    <td className="n">{inches(l.trail3, l.trail3Trace)}</td>
-                    <td>
-                      <a href={`#/courts?date=${l.date}`}>Court grid</a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <SourceLine manifest={manifest}>{`${num(leads.length)} dates · dry definition ${weather.dry_definition}`}</SourceLine>
-      </section>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="hint">Leads, not errors: wet courts from earlier storms, local showers, or maintenance can explain these.</div>
+      </Group>
 
-      <section className="panel" aria-labelledby="src-h">
-        <h2 id="src-h">Weather sources and checks</h2>
-        <div className="table-wrap">
-          <table className="data">
+      <Group title="Sources">
+        <div className="grid-wrap sunken">
+          <table className="dg">
             <thead>
               <tr>
                 <th>Use</th>
                 <th>Source</th>
-                <th>Units in file</th>
+                <th>Units</th>
                 <th>Time basis</th>
                 <th>Files</th>
               </tr>
@@ -183,42 +134,33 @@ export function Weather({ manifest, overview, weather }: { manifest: Manifest; o
             <tbody>
               {weather.sources.map((s) => (
                 <tr key={s.role}>
-                  <td>{s.role === 'daily' ? 'Daily totals' : 'Hourly (slot-level)'}</td>
+                  <td>{s.role === 'daily' ? 'Daily' : 'Hourly'}</td>
                   <td>
-                    {s.provider}
-                    <br />
-                    <span className="small muted">{s.station}</span>
+                    {s.provider} · {s.station}
                   </td>
                   <td>{s.units_in_file}</td>
                   <td>{s.time_basis}</td>
-                  <td className="small">
-                    {s.files.map((f) => (
-                      <div key={f.filename}>
-                        {f.filename}
-                        {f.duplicate_of ? <span className="muted"> — identical to {f.duplicate_of}, skipped</span> : <span className="muted num"> · sha256 {f.sha256.slice(0, 12)}…</span>}
-                      </div>
-                    ))}
+                  <td>
+                    {s.files
+                      .map((f) => (f.duplicate_of ? `${f.filename} (duplicate, skipped)` : f.filename))
+                      .join('; ')}
                   </td>
                 </tr>
               ))}
+              {cov.days_by_source['ncei-daily-api'] ? (
+                <tr>
+                  <td>Daily (gap fill)</td>
+                  <td>NOAA NCEI Access Data Service</td>
+                  <td>inches</td>
+                  <td>LST day</td>
+                  <td>{num(cov.days_by_source['ncei-daily-api'])} days after {longDate(cov.lcd_daily_last, false)}</td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
-        <ul className="small" style={{ marginTop: 12 }}>
-          <li>Daily totals come from NOAA’s official daily summary (converted from millimetres; trace kept). The supplied NOAA file ends {cov.lcd_daily_last}; later days come from NOAA’s NCEI data service ({num(cov.days_by_source['ncei-daily-api'] ?? 0)} days), complete hourly sums ({num(cov.days_by_source['iem-hourly-sum'] ?? 0)}), or stay missing ({num(cov.days_by_source['missing'] ?? 0)}).</li>
-          <li>Hourly rain is read from each routine :51 observation’s precipitation group; “P0000” is a trace, and a “PNO” (gauge not operating) hour is missing.</li>
-          <li>Check: hourly sums regrouped to NOAA’s standard-time days agree with the daily totals within 0.03&quot; on {pct(rc.wet_within_0_03_in, 0)} of {num(rc.wet_days)} wet days.</li>
-          <li>“During the slot” uses the observation ending at :51 of the start hour; “before start” windows only use observations that end before the slot begins, so later rain never leaks in.</li>
-          <li>Rain the same day is known only afterwards; the planner’s weather filter uses only the day(s) before.</li>
-        </ul>
-        {weather.warnings.length > 0 && <div className="callout">{weather.warnings.join(' ')}</div>}
-      </section>
+        <div className="hint">Missing rain is never counted as dry. Trailing windows exclude the day itself. Data {manifest.data_version}.</div>
+      </Group>
     </>
   )
-}
-
-function sharePrevWet(weather: WeatherData, overview: Overview) {
-  const rows = rainoutByDailyBucket(weather, overview.daily, 'prev1').filter((r) => r.bucket === 'moderate' || r.bucket === 'heavy')
-  const rec = rows.reduce((a, r) => a + r.recorded, 0)
-  return rec ? rows.reduce((a, r) => a + r.rainedOut, 0) / rec : null
 }

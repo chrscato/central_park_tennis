@@ -3,8 +3,8 @@
 
 import { useEffect, useState } from 'react'
 
-export type Route = 'overview' | 'planner' | 'outlook' | 'courts' | 'weather' | 'methodology'
-const ROUTES: Route[] = ['overview', 'planner', 'outlook', 'courts', 'weather', 'methodology']
+export type Route = 'planner' | 'outlook' | 'courts' | 'weather' | 'methodology'
+const ROUTES: Route[] = ['planner', 'outlook', 'courts', 'weather', 'methodology']
 
 export interface Location {
   route: Route
@@ -15,9 +15,9 @@ export interface Location {
 export function parseHash(hash: string): Location {
   const raw = hash.replace(/^#\/?/, '')
   const [path, query = ''] = raw.split('?')
-  const route = (path || 'overview') as Route
-  const ok = ROUTES.includes(route)
-  return { route: ok ? route : 'overview', params: new URLSearchParams(query), invalid: !ok }
+  const route = (path || 'planner') as Route
+  const ok = ROUTES.includes(route) || path === 'overview' // old links land on the planner
+  return { route: ROUTES.includes(route) ? route : 'planner', params: new URLSearchParams(query), invalid: !ok }
 }
 
 export function useLocation(): Location {

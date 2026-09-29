@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CurvesChart, TimeHistogram } from '../components/charts'
-import { SourceLine } from '../components/common'
+import { Group, Readout } from '../components/common'
 import type { Manifest, Timing } from '../lib/data'
-import { clock, hourLabel, listJoin, longDate, MONTHS, MONTHS_LONG, num, shortHour, WEEKDAYS, WEEKDAYS_LONG } from '../lib/format'
-import { alarmMinute, computePlanner, DEFAULT_FILTER, type PlannerFilter } from '../lib/stats'
-import { parseIntList, replaceParams } from '../lib/url'
+import { clock, hourLabel, inList, longDate, MONTHS, num, WEEKDAYS } from '../lib/format'
 import { combineTests, OPENING_FILTER, openingTest, type OpeningFilter } from '../lib/outlook'
+import { alarmMinute, computePlanner, DEFAULT_FILTER, type PlannerFilter } from '../lib/stats'
+import { href, parseIntList, replaceParams } from '../lib/url'
 import { PLANNER_WEATHER, plannerWeatherTest, type PlannerWeather, type WeatherData } from '../lib/weather'
 
 const SEASON_MONTHS = [4, 5, 6, 7, 8, 9, 10]
+const DAYS = [1, 2, 3, 4, 5, 6, 0]
 const HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
 const BIN = 15
 
@@ -29,39 +30,31 @@ function readState(params: URLSearchParams, years: number[]) {
   }
   const filter: PlannerFilter = {
     months: pick('m', 1, 12, DEFAULT_FILTER.months, 'month'),
-    weekdays: pick('dow', 0, 6, DEFAULT_FILTER.weekdays, 'day of week'),
+    weekdays: pick('dow', 0, 6, DEFAULT_FILTER.weekdays, 'day'),
     years: params.get('y') === 'all' || !params.has('y') ? [] : pick('y', Math.min(...years), Math.max(...years), [], 'season'),
     hours: pick('h', 0, 23, DEFAULT_FILTER.hours, 'start time'),
   }
-  const num = (key: string, fallback: number) => {
+  const n = (key: string, fallback: number) => {
     const raw = params.get(key)
     if (raw == null) return fallback
-    const n = Number(raw)
-    if (!Number.isFinite(n) || n < 0 || n > 600) {
+    const v = Number(raw)
+    if (!Number.isFinite(v) || v < 0 || v > 600) {
       invalid.push(key)
       return fallback
     }
-    return Math.round(n)
+    return Math.round(v)
   }
-  const personal: Personal = {
-    prep: num('prep', 20),
-    travel: num('travel', 30),
-    buffer: num('buf', 0),
-    share: params.get('share') === '1',
-  }
+  const personal: Personal = { prep: n('prep', 20), travel: n('travel', 30), buffer: n('buf', 0), share: params.get('share') === '1' }
   const bench = params.get('bench') !== '0'
-  let wx: PlannerWeather = 'any'
-  const rawWx = params.get('wx')
-  if (rawWx != null) {
-    if (rawWx in PLANNER_WEATHER) wx = rawWx as PlannerWeather
-    else invalid.push('weather')
+  const enumParam = <T extends string>(key: string, allowed: Record<string, string>, label: string): T | 'any' => {
+    const raw = params.get(key)
+    if (raw == null) return 'any'
+    if (raw in allowed) return raw as T
+    invalid.push(label)
+    return 'any'
   }
-  let open: OpeningFilter = 'any'
-  const rawOpen = params.get('open')
-  if (rawOpen != null) {
-    if (rawOpen in OPENING_FILTER) open = rawOpen as OpeningFilter
-    else invalid.push('opening')
-  }
+  const wx = enumParam<PlannerWeather>('wx', PLANNER_WEATHER, 'weather') as PlannerWeather
+  const open = enumParam<OpeningFilter>('open', OPENING_FILTER, 'opening') as OpeningFilter
   return { filter, personal, bench, wx, open, invalid }
 }
 
@@ -83,49 +76,22 @@ function toParams(f: PlannerFilter, bench: boolean, p: Personal, wx: PlannerWeat
   return q
 }
 
-function toggle(list: number[], v: number) {
-  return list.includes(v) ? list.filter((x) => x !== v) : [...list, v].sort((a, b) => a - b)
-}
+const toggle = (list: number[], v: number) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v].sort((a, b) => a - b))
 
-function Chips({
-  legend,
-  options,
-  selected,
-  onChange,
-  label,
-}: {
-  legend: string
-  options: number[]
-  selected: number[]
-  onChange: (v: number[]) => void
-  label: (v: number) => string
-}) {
+function Checks({ options, selected, onChange, label, cols }: { options: number[]; selected: number[]; onChange: (v: number[]) => void; label: (v: number) => string; cols: number }) {
   return (
-    <fieldset>
-      <legend>{legend}</legend>
-      <div className="chips">
-        {options.map((o) => (
-          <label className="chip" key={o}>
-            <input type="checkbox" checked={selected.includes(o)} onChange={() => onChange(toggle(selected, o))} />
-            <span>{label(o)}</span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
+    <div className={`checks c${cols}`}>
+      {options.map((o) => (
+        <label key={o}>
+          <input type="checkbox" checked={selected.includes(o)} onChange={() => onChange(toggle(selected, o))} />
+          {label(o)}
+        </label>
+      ))}
+    </div>
   )
 }
 
-export function Planner({
-  manifest,
-  timing,
-  weather,
-  params,
-}: {
-  manifest: Manifest
-  timing: Timing
-  weather: WeatherData
-  params: URLSearchParams
-}) {
+export function Planner({ manifest, timing, weather, params }: { manifest: Manifest; timing: Timing; weather: WeatherData; params: URLSearchParams }) {
   const years = useMemo(() => [...new Set(timing.dates.map((d) => Number(d.slice(0, 4))))], [timing])
   const initial = useMemo(() => readState(params, years), []) // eslint-disable-line react-hooks/exhaustive-deps
   const wxAvailable = weather.status === 'available'
@@ -139,385 +105,247 @@ export function Planner({
   useEffect(() => replaceParams('planner', toParams(filter, bench, personal, wx, open)), [filter, bench, personal, wx, open])
 
   const minDates = manifest.cohort.min_dates_for_planning_target
-  const wxTest = useMemo(
+  const cutoff = manifest.snapshot.historical_outcome_cutoff
+  const test = useMemo(
     () => (wxAvailable ? combineTests(plannerWeatherTest(weather, wx), openingTest(weather, open)) : undefined),
     [weather, wx, open, wxAvailable],
   )
   const r = useMemo(
-    () =>
-      computePlanner(timing, filter, {
-        firstDate: manifest.snapshot.reservation_date_min,
-        cutoff: manifest.snapshot.historical_outcome_cutoff,
-        minDates,
-        binMinutes: BIN,
-        weather: wxTest,
-      }),
-    [timing, filter, manifest, minDates, wxTest],
+    () => computePlanner(timing, filter, { firstDate: manifest.snapshot.reservation_date_min, cutoff, minDates, binMinutes: BIN, weather: test }),
+    [timing, filter, manifest, cutoff, minDates, test],
   )
-  const wxTxt =
-    (wx === 'any' ? '' : ` · ${PLANNER_WEATHER[wx].toLowerCase()}`) + (open === 'any' ? '' : ` · ${OPENING_FILTER[open].toLowerCase()}`)
 
   const incomplete = !filter.months.length || !filter.weekdays.length || !filter.hours.length
-  const monthsTxt = listJoin(filter.months.map((m) => MONTHS_LONG[m - 1]))
-  const daysTxt = listJoin(filter.weekdays.map((d) => WEEKDAYS_LONG[d] + 's'))
-  const hoursTxt = listJoin(filter.hours.map(hourLabel))
-  const yearsTxt = filter.years.length ? filter.years.join(' & ') : 'all seasons'
   const target = r.planningTarget.suppressed ? null : r.planningTarget.minute
   const alarm = target == null ? null : alarmMinute(target, personal.prep, personal.travel, personal.buffer)
-  const cutoff = manifest.snapshot.historical_outcome_cutoff
+  const limited = r.days.length < minDates
+  const query = [
+    inList(filter.weekdays.map((d) => WEEKDAYS[d])),
+    inList(filter.months.map((m) => MONTHS[m - 1])),
+    inList(filter.hours.map(hourLabel)),
+    filter.years.length ? filter.years.join(', ') : 'All seasons',
+    wx !== 'any' ? PLANNER_WEATHER[wx] : null,
+    open !== 'any' ? OPENING_FILTER[open] : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(window.location.href)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setTimeout(() => setCopied(false), 1500)
     } catch {
       setCopied(false)
     }
   }
-
-  const broaden = (
-    <div className="actions" style={{ marginTop: 8 }}>
-      {filter.weekdays.length < 5 && (
-        <button className="btn" type="button" onClick={() => setFilter({ ...filter, weekdays: [1, 2, 3, 4, 5] })}>
-          Broaden to all weekdays
-        </button>
-      )}
-      {filter.months.length < SEASON_MONTHS.length && (
-        <button
-          className="btn"
-          type="button"
-          onClick={() => {
-            const set = new Set(filter.months)
-            filter.months.forEach((m) => [m - 1, m + 1].forEach((x) => SEASON_MONTHS.includes(x) && set.add(x)))
-            setFilter({ ...filter, months: [...set].sort((a, b) => a - b) })
-          }}
-        >
-          Add adjacent months
-        </button>
-      )}
-      {filter.years.length > 0 && (
-        <button className="btn" type="button" onClick={() => setFilter({ ...filter, years: [] })}>
-          Use all seasons
-        </button>
-      )}
-    </div>
-  )
+  const setP = (k: keyof Personal) => (e: React.ChangeEvent<HTMLInputElement>) => setPersonal({ ...personal, [k]: Math.max(0, Number(e.target.value) || 0) })
 
   return (
-    <>
-      <section className="hero">
-        <div className="kicker">Walkup planner</div>
-        <h1>When are the courts actually booked?</h1>
-        <p className="lede">
-          Pick when you want to play. See when comparable successful walkup reservations were entered on past dates — and work
-          back to when you’d need to leave. Historical records only; this is not live court availability.
-        </p>
-      </section>
-
-      {initial.invalid.length > 0 && (
-        <div className="callout" role="alert">
-          Some filters in this link were invalid ({listJoin(initial.invalid)}) and were reset to defaults.
-        </div>
-      )}
-
-      <section className="panel" aria-labelledby="f-h">
-        <h2 id="f-h">When do you want to play?</h2>
-        <div className="controls" style={{ marginTop: 10 }}>
-          <Chips legend="Month" options={SEASON_MONTHS} selected={filter.months} onChange={(months) => setFilter({ ...filter, months })} label={(m) => MONTHS[m - 1]} />
-          <Chips legend="Day of week" options={[1, 2, 3, 4, 5, 6, 0]} selected={filter.weekdays} onChange={(weekdays) => setFilter({ ...filter, weekdays })} label={(d) => WEEKDAYS[d]} />
-          <Chips legend="Slot start time" options={HOURS} selected={filter.hours} onChange={(hours) => setFilter({ ...filter, hours })} label={shortHour} />
-          <fieldset>
-            <legend>Season</legend>
-            <div className="chips">
-              <label className="chip">
-                <input type="radio" name="season" checked={!filter.years.length} onChange={() => setFilter({ ...filter, years: [] })} />
-                <span>All</span>
+    <div className="split">
+      {/* ---------------- query pane ---------------- */}
+      <aside>
+        <Group title="Month">
+          <Checks cols={4} options={SEASON_MONTHS} selected={filter.months} onChange={(months) => setFilter({ ...filter, months })} label={(m) => MONTHS[m - 1]} />
+        </Group>
+        <Group title="Day">
+          <Checks cols={4} options={DAYS} selected={filter.weekdays} onChange={(weekdays) => setFilter({ ...filter, weekdays })} label={(d) => WEEKDAYS[d]} />
+        </Group>
+        <Group title="Court start time">
+          <Checks cols={3} options={HOURS} selected={filter.hours} onChange={(hours) => setFilter({ ...filter, hours })} label={hourLabel} />
+        </Group>
+        <Group title="Season">
+          <div className="checks c3">
+            <label>
+              <input type="radio" name="season" checked={!filter.years.length} onChange={() => setFilter({ ...filter, years: [] })} />
+              All
+            </label>
+            {years.map((y) => (
+              <label key={y}>
+                <input type="radio" name="season" checked={filter.years.length === 1 && filter.years[0] === y} onChange={() => setFilter({ ...filter, years: [y] })} />
+                {y}
               </label>
-              {years.map((y) => (
-                <label className="chip" key={y}>
-                  <input type="radio" name="season" checked={filter.years.length === 1 && filter.years[0] === y} onChange={() => setFilter({ ...filter, years: [y] })} />
-                  <span>{y}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          <fieldset>
-            <legend>
-              <label htmlFor="wx">Weather before the day</label>
-            </legend>
-            <select id="wx" disabled={!wxAvailable} value={wx} onChange={(e) => setWx(e.target.value as PlannerWeather)} aria-describedby="wx-note">
+            ))}
+          </div>
+        </Group>
+        <Group title="Conditions">
+          <div className="field">
+            <label htmlFor="wx">Rain before</label>
+            <select id="wx" disabled={!wxAvailable} value={wx} onChange={(e) => setWx(e.target.value as PlannerWeather)}>
               {Object.entries(PLANNER_WEATHER).map(([k, v]) => (
                 <option key={k} value={k}>
                   {v}
                 </option>
               ))}
             </select>
-            <p id="wx-note" className="small muted" style={{ marginTop: 4 }}>
-              {wxAvailable
-                ? 'Central Park gauge, days before play only — what you could know that morning. Dates without weather data are left out and listed.'
-                : 'Weather data unavailable in this build.'}
-            </p>
-          </fieldset>
-          <fieldset>
-            <legend>
-              <label htmlFor="open">Morning courts</label>
-            </legend>
-            <select id="open" disabled={!wxAvailable} value={open} onChange={(e) => setOpen(e.target.value as OpeningFilter)} aria-describedby="open-note">
+            <label htmlFor="open">Mornings</label>
+            <select id="open" disabled={!wxAvailable} value={open} onChange={(e) => setOpen(e.target.value as OpeningFilter)}>
               {Object.entries(OPENING_FILTER).map(([k, v]) => (
                 <option key={k} value={k}>
-                  {v}
+                  {k === 'late' ? 'Rained out (late opening)' : v}
                 </option>
               ))}
             </select>
-            <p id="open-note" className="small muted" style={{ marginTop: 4 }}>
-              Late opening: at least half of recorded 7–11 a.m. court-hours rained out. Known that morning, not in advance.
-            </p>
-          </fieldset>
-        </div>
-        <p className="small muted" style={{ marginTop: 10, marginBottom: 0 }}>
-          No records exist in this export for November–March. Selected slot start times: {hoursTxt || 'none'}
-        </p>
-      </section>
-
-      {incomplete ? (
-        <div className="callout" role="status">
-          Select at least one month, day of week, and slot start time.
-        </div>
-      ) : r.slotCount === 0 ? (
-        <section className="panel">
-          <h2>No qualifying records for this selection</h2>
-          <p>
-            No qualifying successful walkup entries were recorded for {daysTxt} in {monthsTxt} ({yearsTxt}{wxTxt}) at {hoursTxt}. That does
-            not mean courts were free or unused — only that this export contains no matching successful walkup entry.
-          </p>
-          {broaden}
-        </section>
-      ) : (
-        <>
-          <section className="panel" aria-labelledby="r-h">
-            <div className="result-hero">
-              <div>
-                <h2 id="r-h" className="sr-only">
-                  Result
-                </h2>
-                <p className="small muted" style={{ marginBottom: 4 }}>
-                  {daysTxt} in {monthsTxt} · {yearsTxt} · slots starting {hoursTxt}
-                  {wxTxt}
-                </p>
-                <div className="big-number">{clock(r.pooled.p50)}</div>
-                <p className="statement">
-                  On these {num(r.days.length)} recorded date{r.days.length === 1 ? '' : 's'}, half of {num(r.slotCount)} qualifying
-                  successful walkup entries were made by {clock(r.pooled.p50)}
-                </p>
-                <dl className="kv">
-                  <dt>Earliest quarter by</dt>
-                  <dd>{clock(r.pooled.p25)}</dd>
-                  <dt>Three quarters by</dt>
-                  <dd>{clock(r.pooled.p75)}</dd>
-                  <dt>Typical date’s median</dt>
-                  <dd>
-                    {clock(r.dayWeighted.p50)} <span className="muted small">(middle 50% of dates: {clock(r.dayWeighted.p25)}–{clock(r.dayWeighted.p75)})</span>
-                  </dd>
-                </dl>
-                <p className="small muted" style={{ marginTop: 8 }}>
-                  The first three figures pool every qualifying slot, so busy dates count more. “Typical date” weights each date
-                  equally. These describe reservations that succeeded — not your chance of getting a court.
-                </p>
-              </div>
-
-              <div className={`target${target == null ? ' suppressed' : ''}`}>
-                <div className="t-label">Planning benchmark</div>
-                <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center', margin: '4px 0 8px' }}>
-                  <input type="checkbox" checked={bench} onChange={(e) => setBench(e.target.checked)} /> Show benchmark
-                </label>
-                {!bench ? (
-                  <p className="small muted">Benchmark hidden. Descriptive times at left are unaffected.</p>
-                ) : target == null ? (
-                  <>
-                    <p style={{ fontWeight: 700, marginBottom: 4 }}>Not shown — limited sample</p>
-                    <p className="small">
-                      {r.planningTarget.suppressed && r.planningTarget.reason} A benchmark needs at least {minDates} dates. The
-                      descriptive times still apply to the dates shown.
-                    </p>
-                    {broaden}
-                  </>
-                ) : (
-                  <>
-                    <div className="big-number" style={{ fontSize: '2.6rem' }}>
-                      {clock(target)}
-                    </div>
-                    <p className="small">
-                      Method: find each date’s 25th-percentile entry time, take the 25th percentile of those, round down to 15
-                      minutes. An intentionally early benchmark from {num(r.days.length)} dates — not a forecast or a guarantee.
-                    </p>
-                    <div className="inline-fields" style={{ marginTop: 8 }}>
-                      <label>
-                        Get ready (min)
-                        <input type="number" min={0} max={600} value={personal.prep} onChange={(e) => setPersonal({ ...personal, prep: Math.max(0, Number(e.target.value) || 0) })} />
-                      </label>
-                      <label>
-                        Travel (min)
-                        <input type="number" min={0} max={600} value={personal.travel} onChange={(e) => setPersonal({ ...personal, travel: Math.max(0, Number(e.target.value) || 0) })} />
-                      </label>
-                      <label>
-                        Queue buffer (min)
-                        <input type="number" min={0} max={600} value={personal.buffer} onChange={(e) => setPersonal({ ...personal, buffer: Math.max(0, Number(e.target.value) || 0) })} />
-                      </label>
-                    </div>
-                    <p style={{ marginTop: 10, marginBottom: 2 }}>
-                      Set an alarm for <strong style={{ fontSize: '1.3rem' }}>{clock(alarm)}</strong>
-                    </p>
-                    <p className="small muted">
-                      = {clock(target)} − {personal.prep} min get ready − {personal.travel} min travel − {personal.buffer} min
-                      buffer. All three are your assumptions.
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="actions" style={{ marginTop: 14 }}>
-              <button className="btn" type="button" onClick={copyLink}>
-                {copied ? 'Link copied' : 'Copy link to these filters'}
-              </button>
-              <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <input type="checkbox" checked={personal.share} onChange={(e) => setPersonal({ ...personal, share: e.target.checked })} />
-                Include my get-ready/travel/buffer times in the link
-              </label>
-            </div>
-            <SourceLine manifest={manifest}>
-              {`Cohort ${timing.cohort_version} · n = ${num(r.slotCount)} slots on ${num(r.days.length)} dates · reservation dates before ${longDate(cutoff, false)}`}
-            </SourceLine>
-          </section>
-
-          <section className="panel" aria-labelledby="sample-h">
-            <h2 id="sample-h">What’s in this sample</h2>
-            <div className="cards" style={{ marginBottom: 8 }}>
-              <div className="card">
-                <div className="label">Qualifying slots</div>
-                <div className="value">{num(r.slotCount)}</div>
-                <div className="note">One per slot: its earliest qualifying walkup entry</div>
-              </div>
-              <div className="card">
-                <div className="label">Dates with qualifying entries</div>
-                <div className="value">{num(r.days.length)}</div>
-                <div className="note">{r.days.length < minDates ? 'Limited sample' : 'Each is a curve below'}</div>
-              </div>
-              <div className="card">
-                <div className="label">Dates with records, none qualifying</div>
-                <div className="value">{num(r.zeroQualifyingDates.length)}</div>
-                <div className="note">Unknown for timing; not drawn as zero</div>
-              </div>
-              <div className="card">
-                <div className="label">Matching dates not in export</div>
-                <div className="value">{num(r.noRecordDates.length)}</div>
-                <div className="note">No records at these hours</div>
-              </div>
-              {(wx !== 'any' || open !== 'any') && (
-                <div className="card">
-                  <div className="label">Dates left out by weather/opening filter</div>
-                  <div className="value">{num(r.weatherExcludedDates + r.weatherUnknownDates.length)}</div>
-                  <div className="note">
-                    {num(r.weatherExcludedDates)} didn’t match; {num(r.weatherUnknownDates.length)} had no weather data
-                  </div>
-                </div>
-              )}
-            </div>
-            {r.days.length < minDates && (
-              <div className="callout">
-                Limited sample: {r.days.length} date{r.days.length === 1 ? '' : 's'}. Times above describe these dates only.
-              </div>
-            )}
-            {(r.zeroQualifyingDates.length > 0 || r.noRecordDates.length > 0 || r.weatherUnknownDates.length > 0) && (
-              <details>
-                <summary>List excluded and missing dates</summary>
-                {r.weatherUnknownDates.length > 0 && (
-                  <p className="small">
-                    <strong>No weather data (left out, not assumed dry):</strong> {r.weatherUnknownDates.map((d) => longDate(d)).join('; ')}
-                  </p>
-                )}
-                {r.zeroQualifyingDates.length > 0 && (
-                  <p className="small">
-                    <strong>Records but no qualifying walkup entry:</strong> {r.zeroQualifyingDates.map((d) => longDate(d)).join('; ')}
-                  </p>
-                )}
-                {r.noRecordDates.length > 0 && (
-                  <p className="small">
-                    <strong>Not in this export at the selected hours:</strong> {r.noRecordDates.map((d) => longDate(d)).join('; ')}
-                  </p>
-                )}
-              </details>
-            )}
-          </section>
-
-          <div className="grid-2">
-            <section className="panel" aria-labelledby="curve-h">
-              <h2 id="curve-h">Daily booking curves</h2>
-              <p className="sub">
-                For each date: the share of that day’s qualifying entries made by each clock time. It is not a count of courts
-                left.
-              </p>
-              <CurvesChart result={r} showTarget={bench} />
-              <SourceLine manifest={manifest}>{`${num(r.days.length)} dates, each weighted equally`}</SourceLine>
-            </section>
-            <section className="panel" aria-labelledby="hist-h">
-              <h2 id="hist-h">When entries were made</h2>
-              <p className="sub">Qualifying entries per {BIN}-minute window, all dates pooled.</p>
-              <TimeHistogram bins={r.histogram} binMinutes={BIN} />
-              <SourceLine manifest={manifest}>{`n = ${num(r.slotCount)} slots`}</SourceLine>
-            </section>
           </div>
+          <div className="hint">Late opening = 50%+ of 7–11 AM courts rained out.</div>
+        </Group>
+        <div className="row">
+          <button className="btn" type="button" onClick={copyLink}>
+            {copied ? 'Copied' : 'Copy link'}
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={() => {
+              setFilter(DEFAULT_FILTER)
+              setWx('any')
+              setOpen('any')
+            }}
+          >
+            Reset
+          </button>
+        </div>
+        <label className="check small" style={{ marginTop: 6 }}>
+          <input type="checkbox" checked={personal.share} onChange={(e) => setPersonal({ ...personal, share: e.target.checked })} />
+          Include my times in link
+        </label>
+      </aside>
 
-          <section className="panel" aria-labelledby="tbl-h">
-            <h2 id="tbl-h">Every comparable date</h2>
-            <div className="table-wrap">
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th className="n">Qualifying slots</th>
-                    <th className="n">First entry</th>
-                    <th className="n">25th pct</th>
-                    <th className="n">Median</th>
-                    <th className="n">Last entry</th>
-                    <th>Records</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.days.map((d) => (
-                    <tr key={d.date}>
-                      <td>{longDate(d.date)}</td>
-                      <td className="n">{d.times.length}</td>
-                      <td className="n">{clock(d.times[0])}</td>
-                      <td className="n">{clock(d.p25)}</td>
-                      <td className="n">{clock(d.p50)}</td>
-                      <td className="n">{clock(d.times[d.times.length - 1])}</td>
-                      <td>
-                        <a href={`#/courts?date=${d.date}`}>Court grid</a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {/* ---------------- results pane ---------------- */}
+      <section aria-label="Results">
+        {initial.invalid.length > 0 && <div className="note">Invalid link filters reset: {inList(initial.invalid)}.</div>}
+        <div className="small" style={{ marginBottom: 6 }}>
+          <b>Query:</b> {query}
+        </div>
+
+        {incomplete ? (
+          <div className="note">Select at least one month, day, and start time.</div>
+        ) : r.slotCount === 0 ? (
+          <div className="note">No qualifying walkup bookings for this query.</div>
+        ) : (
+          <>
+            <div className="readouts">
+              <Readout label="Half booked by" value={clock(r.pooled.p50)} accent sub={`${num(r.slotCount)} slots`} />
+              <Readout label="25% booked by" value={clock(r.pooled.p25)} />
+              <Readout label="75% booked by" value={clock(r.pooled.p75)} />
+              <Readout label="Typical day (median)" value={clock(r.dayWeighted.p50)} sub={`${clock(r.dayWeighted.p25)}–${clock(r.dayWeighted.p75)}`} />
+              <Readout label="Dates" value={num(r.days.length)} sub={limited ? 'Limited sample' : `of ${num(r.days.length + r.zeroQualifyingDates.length)} with records`} />
             </div>
-          </section>
-        </>
-      )}
+            {limited && (
+              <div className="note">
+                Limited sample: {r.days.length} dates (min {minDates} for a benchmark).{' '}
+                {filter.weekdays.length < 5 && (
+                  <button className="btn small" type="button" onClick={() => setFilter({ ...filter, weekdays: [1, 2, 3, 4, 5] })}>
+                    Use Mon–Fri
+                  </button>
+                )}{' '}
+                {filter.months.length < SEASON_MONTHS.length && (
+                  <button
+                    className="btn small"
+                    type="button"
+                    onClick={() => {
+                      const set = new Set(filter.months)
+                      filter.months.forEach((m) => [m - 1, m + 1].forEach((x) => SEASON_MONTHS.includes(x) && set.add(x)))
+                      setFilter({ ...filter, months: [...set].sort((a, b) => a - b) })
+                    }}
+                  >
+                    Add adjacent months
+                  </button>
+                )}
+              </div>
+            )}
 
-      <section className="panel" aria-labelledby="def-h">
-        <h2 id="def-h">What counts as a qualifying entry</h2>
-        <ol className="small">
-          <li>Reservation date before {longDate(cutoff, false)} (the {manifest.snapshot.cutoff_status} snapshot boundary).</li>
-          <li>The slot’s recorded status is “all checked in.”</li>
-          <li>A record with method “walkup” and player status “Checked in.” Additional players (second/third/fourth) and online, phone, waiting-list and repeat-list entries are excluded.</li>
-          <li>Entered on the same calendar day as the slot, at or before its start time (times read as {manifest.timezone.assumed}, provisional).</li>
-          <li>Per slot, the earliest such entry. This may not be the first reservation ever made for that slot.</li>
-        </ol>
-        <p className="small muted">
-          Creation timestamps record when a booking was entered — not when anyone joined a line or checked in. The export contains
-          no record of people who arrived and did not get a court.
-        </p>
+            <div className="cols-2" style={{ marginTop: 8 }}>
+              <Group title="Share of each day's bookings made by time">
+                <div className="chart-frame sunken">
+                  <CurvesChart result={r} showTarget={bench} />
+                </div>
+              </Group>
+              <Group title={`Bookings per ${BIN} minutes (all dates)`}>
+                <div className="chart-frame sunken">
+                  <TimeHistogram bins={r.histogram} binMinutes={BIN} />
+                </div>
+              </Group>
+            </div>
+
+            <Group title="Benchmark & alarm">
+              <div className="row" style={{ alignItems: 'stretch' }}>
+                <div style={{ minWidth: 150 }}>
+                  <Readout
+                    label="Arrive by (benchmark)"
+                    value={bench ? (target == null ? 'n/a' : clock(target)) : 'hidden'}
+                    off={!bench || target == null}
+                    sub={bench && target == null ? `Needs ${minDates}+ dates` : undefined}
+                  />
+                </div>
+                <div className="field" style={{ alignSelf: 'center' }}>
+                  <label htmlFor="prep">Get ready (min)</label>
+                  <input id="prep" type="number" min={0} max={600} value={personal.prep} onChange={setP('prep')} />
+                  <label htmlFor="travel">Travel (min)</label>
+                  <input id="travel" type="number" min={0} max={600} value={personal.travel} onChange={setP('travel')} />
+                  <label htmlFor="buf">Buffer (min)</label>
+                  <input id="buf" type="number" min={0} max={600} value={personal.buffer} onChange={setP('buffer')} />
+                </div>
+                <div style={{ minWidth: 150 }}>
+                  <Readout label="Set alarm for" value={alarm == null || !bench ? '—' : clock(alarm)} accent off={alarm == null || !bench} />
+                </div>
+              </div>
+              <label className="check small" style={{ marginTop: 6 }}>
+                <input type="checkbox" checked={bench} onChange={(e) => setBench(e.target.checked)} />
+                Show benchmark (25th pct of each day's 25th-pct booking time, rounded down to 15 min)
+              </label>
+            </Group>
+
+            <Group title={`Dates (${num(r.days.length)})`}>
+              <div className="grid-wrap sunken">
+                <table className="dg">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th className="n">Slots</th>
+                      <th className="n">First</th>
+                      <th className="n">25%</th>
+                      <th className="n">Median</th>
+                      <th className="n">Last</th>
+                      <th>Grid</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {r.days.map((d) => (
+                      <tr key={d.date}>
+                        <td>{longDate(d.date)}</td>
+                        <td className="n">{d.times.length}</td>
+                        <td className="n">{clock(d.times[0])}</td>
+                        <td className="n">{clock(d.p25)}</td>
+                        <td className="n">{clock(d.p50)}</td>
+                        <td className="n">{clock(d.times[d.times.length - 1])}</td>
+                        <td>
+                          <a href={href('courts', { date: d.date })}>Open</a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {(r.zeroQualifyingDates.length > 0 || r.noRecordDates.length > 0 || r.weatherUnknownDates.length > 0 || r.weatherExcludedDates > 0) && (
+                <details className="small" style={{ marginTop: 4 }}>
+                  <summary>
+                    Excluded: {r.zeroQualifyingDates.length} no walkup booking · {r.noRecordDates.length} not in export
+                    {test ? ` · ${r.weatherExcludedDates} filtered · ${r.weatherUnknownDates.length} no weather data` : ''}
+                  </summary>
+                  {r.zeroQualifyingDates.length > 0 && <p>No walkup booking: {r.zeroQualifyingDates.map((d) => longDate(d, false)).join(', ')}</p>}
+                  {r.noRecordDates.length > 0 && <p>Not in export: {r.noRecordDates.map((d) => longDate(d, false)).join(', ')}</p>}
+                  {r.weatherUnknownDates.length > 0 && <p>No weather data: {r.weatherUnknownDates.map((d) => longDate(d, false)).join(', ')}</p>}
+                </details>
+              )}
+            </Group>
+          </>
+        )}
+        <div className="foot">
+          Times = earliest same-day walkup booking per checked-in court, {timing.cohort_version}, dates before {longDate(cutoff, false)}. Successful
+          bookings only — not the odds of getting a court. <a href={href('methodology')}>Method</a>
+        </div>
       </section>
-    </>
+    </div>
   )
 }
