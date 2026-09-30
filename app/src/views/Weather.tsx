@@ -69,22 +69,16 @@ export function Weather({ manifest, overview, weather }: { manifest: Manifest; o
     <>
       <Group title="How much rain closes the courts">
         <div className="readouts">
-          <Readout label="Closed after a dry day" value={pct(prev.find((r) => r.bucket === 'dry')?.share, 0)} accent sub="of courts, day before 0.00&quot;" />
-          <Readout label={'Closed after 0.50"+ the day before'} value={pct(heavy(1), 0)} accent sub="of courts" />
-          <Readout label={'Closed with 0.50"+ that day'} value={pct(heavy(0), 0)} sub="of courts" />
-          <Readout label="Days with rain data" value={`${num(weather.coverage.days_covered)} / ${num(weather.coverage.days_total)}`} sub="Central Park gauge" />
+          <Readout label="No rain the day before" value={pct(prev.find((r) => r.bucket === 'dry')?.share, 0)} accent sub="of courts closed" />
+          <Readout label="Heavy rain the day before" value={pct(heavy(1), 0)} accent sub="of courts closed" />
+          <Readout label="Heavy rain that day" value={pct(heavy(0), 0)} sub="of courts closed" />
         </div>
       </Group>
 
       <div style={{ marginBottom: 30 }}>
         <Figure
-          title={
-            heavy(0) != null && heavy(1) != null && heavy(1)! > heavy(0)!
-              ? `Heavy rain the day before closed more courts (${pct(heavy(1), 0)}) than heavy rain the same day (${pct(heavy(0), 0)})`
-              : 'Share of courts closed, by rain'
-          }
-          sub="Share of court-hours rained out, by rainfall. “Days before” totals don’t include the day itself."
-          source="Sources: NYC Parks FOIL export; NOAA daily summaries, Central Park."
+          title="Share of courts closed, by how much it rained"
+          sub={'Heavy = 0.50" or more. Central Park rain gauge.'}
         >
           <div className="cols-4">
             {DAILY.map((w, i) => (
@@ -100,39 +94,36 @@ export function Weather({ manifest, overview, weather }: { manifest: Manifest; o
       </div>
 
       <Group title="Closed with little or no rain">
+        <p style={{ maxWidth: 680 }}>
+          Days when courts were rained out but the Central Park gauge showed almost no rain in the 24 hours before. Worth a closer look,
+          though one gauge can miss a local shower.
+        </p>
         <div className="readouts">
-          <Readout label="Days flagged" value={num(rows.length)} accent sub={`${num(rows.reduce((a, r) => a + r.rainedOut, 0))} court-hours closed`} />
-          <Readout label={EXPLANATION_LABEL.none} value={num(counts.none)} sub="nothing before, after, or in 3 days" />
-          <Readout label={EXPLANATION_LABEL.later} value={num(counts.later)} sub="closed ahead of rain" />
-          <Readout label={EXPLANATION_LABEL.wet} value={num(counts.wet)} sub="rain in the 3 days before" />
+          <Readout label="Days" value={num(rows.length)} accent />
+          <Readout label={EXPLANATION_LABEL.none} value={num(counts.none)} />
+          <Readout label={EXPLANATION_LABEL.later} value={num(counts.later)} />
+          <Readout label={EXPLANATION_LABEL.wet} value={num(counts.wet)} />
         </div>
-        <div className="hint">
-          Flagged when courts were rained out but the gauge recorded under {opts.dryBefore.toFixed(2)}" in the 24 hours before (at least{' '}
-          {opts.minCourtHours} court-hours that day). Leads to check, not proof: one gauge can miss a local shower.
-        </div>
+
       </Group>
 
       {focus && (
         <div style={{ marginBottom: 26 }}>
           <Figure
-            title={`${longDate(focus)}: rain vs. court status, hour by hour`}
+            title={`${longDate(focus)}, hour by hour`}
             sub={
               focusRow
-                ? `${num(focusRow.rainedOut)} of ${num(focusRow.recordedThatDay)} court-hours closed ${hourSpan(focusRow.hours)} · ${EXPLANATION_LABEL[focusRow.explanation]} · 3 days before: ${inches(focusRow.trail3)}`
+                ? `${num(focusRow.rainedOut)} courts rained out ${hourSpan(focusRow.hours)} · ${EXPLANATION_LABEL[focusRow.explanation].toLowerCase()} · last 3 days: ${inches(focusRow.trail3)}`
                 : undefined
             }
-            source={
-              <>
-                Rain: IEM hourly observations, Central Park (hour ending :51). Courts: NYC Parks FOIL export. <a href={href('courts', { date: focus })}>Open court history</a>
-              </>
-            }
+            source={<a href={href('courts', { date: focus })}>See every court that day</a>}
           >
             <DayRain weather={weather} date={focus} />
           </Figure>
         </div>
       )}
 
-      <Group title="Flagged days">
+      <Group title="All days like this">
         <div className="row" style={{ marginBottom: 8 }}>
           <div className="checks c4" style={{ flex: '1 1 420px', maxWidth: 560 }}>
             {(['all', 'none', 'later', 'wet'] as const).map((k) => (
@@ -148,13 +139,12 @@ export function Weather({ manifest, overview, weather }: { manifest: Manifest; o
             <thead>
               <tr>
                 <th>Date</th>
-                <th className="n">Closed</th>
-                <th className="n">Of</th>
+                <th className="n">Courts closed</th>
                 <th>Hours</th>
-                <th className="n">Rain 24 h before</th>
-                <th className="n">Rain 6 h after</th>
-                <th className="n">3 days before</th>
-                <th>Why it might be</th>
+                <th className="n">Rain before</th>
+                <th className="n">Rain after</th>
+                <th className="n">Last 3 days</th>
+                <th>Likely reason</th>
                 <th />
               </tr>
             </thead>
@@ -165,7 +155,6 @@ export function Weather({ manifest, overview, weather }: { manifest: Manifest; o
                   <td className="n">
                     <b>{num(r.rainedOut)}</b>
                   </td>
-                  <td className="n">{num(r.recordedThatDay)}</td>
                   <td>{hourSpan(r.hours)}</td>
                   <td className="n">{r.rainBefore.toFixed(2)}"</td>
                   <td className="n">{r.rainAfter == null ? '—' : `${r.rainAfter.toFixed(2)}"`}</td>
@@ -183,30 +172,9 @@ export function Weather({ manifest, overview, weather }: { manifest: Manifest; o
             </tbody>
           </table>
         </div>
-        {unknownCourtHours > 0 && <div className="hint">{num(unknownCourtHours)} closed court-hours had gaps in the rain data and weren’t judged.</div>}
+        {unknownCourtHours > 0 && <div className="hint">{num(unknownCourtHours)} closed courts had gaps in the rain data and weren’t checked.</div>}
       </Group>
 
-      <div style={{ marginBottom: 26 }}>
-        <Figure
-          title="Every day: closures against rain"
-          sub="Each dot is a date: rain that day plus the day before (square-root scale) vs. share of court-hours rained out"
-          source="Sources: NYC Parks FOIL export; NOAA and IEM, Central Park."
-        >
-          <div className="legend">
-            {(['none', 'later', 'wet'] as const).map((k) => (
-              <span className="legend-item" key={k}>
-                <span className="swatch" style={{ background: FLAG_COLOR[k], borderRadius: '50%' }} />
-                {EXPLANATION_LABEL[k]}
-              </span>
-            ))}
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#c9c3b8', borderRadius: '50%' }} />
-              Not flagged
-            </span>
-          </div>
-          <RainScatter points={points} />
-        </Figure>
-      </div>
 
       <details className="grp">
         <summary className="fig-title" style={{ cursor: 'pointer' }}>
@@ -215,7 +183,7 @@ export function Weather({ manifest, overview, weather }: { manifest: Manifest; o
         <div className="field" style={{ maxWidth: 420, marginTop: 10 }}>
           <label htmlFor="a1">Little rain = under (in, 24 h before)</label>
           <input id="a1" type="number" step="0.01" min={0} value={opts.dryBefore} onChange={set('dryBefore')} />
-          <label htmlFor="a2">At least (closed court-hours)</label>
+          <label htmlFor="a2">At least (courts closed)</label>
           <input id="a2" type="number" min={1} value={opts.minCourtHours} onChange={set('minCourtHours')} />
           <label htmlFor="a3">“Rain came later” = 6 h after ≥ (in)</label>
           <input id="a3" type="number" step="0.01" min={0} value={opts.laterRain} onChange={set('laterRain')} />
@@ -233,7 +201,7 @@ export function Weather({ manifest, overview, weather }: { manifest: Manifest; o
         </summary>
         <div className="fig-sub" style={{ marginTop: 6 }}>
           Hours where some courts were rained out while others were checked in. Surfaces may drain differently. Separately:{' '}
-          {num(inRain.courtHours)} court-hours were checked in during an hour with 0.05"+ of rain.
+          {num(inRain.courtHours)} courts were played during an hour with 0.05"+ of rain.
         </div>
         <div className="grid-wrap">
           <table className="dg">
@@ -269,10 +237,32 @@ export function Weather({ manifest, overview, weather }: { manifest: Manifest; o
 
       <details className="grp">
         <summary className="fig-title" style={{ cursor: 'pointer' }}>
-          More: rain in the hours before a slot, season timeline, sources
+          More charts and sources
         </summary>
+      <div style={{ margin: '12px 0 22px' }}>
+        <Figure
+          title="Every day: closures against rain"
+          sub="Each dot is a day: rain that day and the day before vs. share of courts rained out"
+          source="Sources: NYC Parks FOIL export; NOAA and IEM, Central Park."
+        >
+          <div className="legend">
+            {(['none', 'later', 'wet'] as const).map((k) => (
+              <span className="legend-item" key={k}>
+                <span className="swatch" style={{ background: FLAG_COLOR[k], borderRadius: '50%' }} />
+                {EXPLANATION_LABEL[k]}
+              </span>
+            ))}
+            <span className="legend-item">
+              <span className="swatch" style={{ background: '#c9c3b8', borderRadius: '50%' }} />
+              Not flagged
+            </span>
+          </div>
+          <RainScatter points={points} />
+        </Figure>
+      </div>
+
         <div style={{ margin: '12px 0 22px' }}>
-          <Figure title="Rain in the hours before a slot starts" sub="Share of court-hours rained out, by hourly rain relative to the start" source="Source: IEM ASOS hourly, Central Park.">
+          <Figure title="Rain in the hours before a slot starts" sub="Share of courts rained out, by rain in the hours before" source="Source: IEM ASOS hourly, Central Park.">
             <div className="cols-4">
               {HOURLY.map((w, i) => (
                 <div key={w}>
@@ -289,7 +279,7 @@ export function Weather({ manifest, overview, weather }: { manifest: Manifest; o
           title="Day by day"
           sub={
             <span className="row" style={{ gap: 14 }}>
-              Daily rain (top) and closed court-hours (bottom)
+              Daily rain (top) and courts rained out (bottom)
               {years.map((y) => (
                 <label className="check" key={y}>
                   <input type="radio" name="yr" checked={year === y} onChange={() => setYear(y)} />

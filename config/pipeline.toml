@@ -1,4 +1,4 @@
-# Central Park Tennis Watch — pipeline configuration.
+# Central Park Tennis Data — pipeline configuration.
 # Paths are relative to the repository root unless absolute.
 
 [inputs]

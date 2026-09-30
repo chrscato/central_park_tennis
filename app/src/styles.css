@@ -1,4 +1,4 @@
-/* Central Park Tennis Watch: clean parks-green UI (independent; no official marks). */
+/* Central Park Tennis Data: clean parks-green UI (independent; no official marks). */
 
 :root {
   color-scheme: light;
@@ -253,3 +253,13 @@ table.court-grid td { padding: 0; }
   .readouts.readouts-5 .readout:nth-child(n + 4) { grid-column: span 3; }
   .readouts.readouts-5 .readout .v { font-size: 20px; white-space: nowrap; }
 }
+
+/* ---------- the answer box on "When to go" ---------- */
+.answer { background: var(--brand-pale); border-left: 5px solid var(--brand); border-radius: 4px; padding: 14px 18px 16px; margin-bottom: 24px; }
+.answer-title { font-size: 14px; font-weight: 700; color: var(--brand-dark); margin-bottom: 4px; }
+.answer-main { font-size: 30px; font-weight: 700; line-height: 1.15; color: var(--ink); }
+.answer-main b { color: var(--brand-dark); }
+.answer-main.small-main { font-size: 18px; }
+.answer-sub { font-size: 16px; margin-top: 4px; }
+.linklike { background: none; border: 0; padding: 0; font: inherit; font-size: 13px; color: var(--brand-dark); text-decoration: underline; cursor: pointer; }
+@media (max-width: 900px) { .answer-main { font-size: 26px; } .answer { padding: 12px 14px 14px; } }

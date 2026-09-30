@@ -147,6 +147,9 @@ describe('latest bookings', () => {
     expect(r.days[1].lastFive).toEqual([500, 900])
     expect(r.latest.last.p50).toBe(675) // median of 450 and 900
     expect(r.latest.fifthLast).toEqual({ p50: 410, n: 1 }) // only day 1 has 5+ bookings
+    // typical day: each day's own 5th-from-last (or first, if fewer than 5), then the median across days
+    expect(r.typical.fifthLast).toBe(455) // median of 410 and 500
+    expect(r.typical.last).toBe(675)
   })
 })
 
@@ -154,8 +157,8 @@ describe('dailyCurveBand', () => {
   it('each curve runs from 0 to 1 and the median is monotone', () => {
     const band = dailyCurveBand(
       [
-        { date: 'a', times: [400, 410, 500], p25: 0, p50: 0, last: 500, lastFive: [] },
-        { date: 'b', times: [420], p25: 0, p50: 0, last: 420, lastFive: [] },
+        { date: 'a', times: [400, 410, 500], p25: 0, p50: 0, p75: 0, last: 500, lastFive: [] },
+        { date: 'b', times: [420], p25: 0, p50: 0, p75: 0, last: 420, lastFive: [] },
       ],
       5,
     )

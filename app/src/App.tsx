@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import { LoadError, Loading, useAsync, ViewBoundary } from './components/common'
 import { Logo } from './components/Logo'
 import { loadInsights, loadManifest, loadOverview, loadTiming, loadWeather, type Insights as InsightsData } from './lib/data'
-import { longDate } from './lib/format'
 import { href, useLocation, type Route } from './lib/url'
 import type { WeatherData } from './lib/weather'
 import { Courts } from './views/Courts'
@@ -21,6 +20,8 @@ const NAV: { route: Route; label: string }[] = [
   { route: 'methodology', label: 'About the data' },
 ]
 
+const monthYear = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
+
 const UNAVAILABLE: WeatherData = { status: 'unavailable', reason: 'weather.json not found' } as WeatherData
 
 export default function App() {
@@ -30,7 +31,7 @@ export default function App() {
 
   useEffect(() => {
     window.scrollTo(0, 0)
-    document.title = `${label} · Central Park Tennis Watch`
+    document.title = `${label} · Central Park Tennis Data`
   }, [label])
 
   const ready = data.status === 'ready' ? data.data : null
@@ -43,8 +44,8 @@ export default function App() {
           <div className="brandline">
             <Logo className="logo" />
             <a className="wordmark" href={href('planner')}>
-              Central Park Tennis Watch
-              <small>Independent guide built from public records · not affiliated with NYC Parks</small>
+              Central Park Tennis Data
+              <small>Independent · not affiliated with NYC Parks</small>
             </a>
           </div>
         </div>
@@ -60,13 +61,9 @@ export default function App() {
         {m && ready && (
           <div className="meta">
             <span>
-              <b>Past records</b>, not live court availability
+              Based on past court records, {monthYear(m.snapshot.reservation_date_min)}–{monthYear(ready[1].cards.latest_outcome_date ?? m.snapshot.historical_outcome_cutoff)}.
+              Not live availability. Export date {m.source.extraction_time_status}.
             </span>
-            <span>
-              {longDate(m.snapshot.reservation_date_min, false)}–{longDate(ready[1].cards.latest_outcome_date ?? m.snapshot.historical_outcome_cutoff, false)}
-            </span>
-            <span>Extraction date {m.source.extraction_time_status}</span>
-            <span className="num">Data {m.data_version}</span>
           </div>
         )}
       </header>

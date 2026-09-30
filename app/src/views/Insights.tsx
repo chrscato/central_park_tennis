@@ -38,7 +38,7 @@ function eveningLeftovers(t: Timing) {
   return { n, byCourt, byHour, freed, retakeMedian: quantile(retakes, 0.5) }
 }
 
-export function Insights({ manifest, insights, timing }: { manifest: Manifest; insights: InsightsData; timing: Timing }) {
+export function Insights({ insights, timing }: { manifest: Manifest; insights: InsightsData; timing: Timing }) {
   const [role, setRole] = useState<'second' | 'fourth'>('second')
   const ev = useMemo(() => eveningLeftovers(timing), [timing])
   const ps = insights.party_size
@@ -71,7 +71,7 @@ export function Insights({ manifest, insights, timing }: { manifest: Manifest; i
         <div style={{ marginTop: 14, maxWidth: 620 }}>
           <Figure
             title={`Courts ${courts.slice(0, 3).map((x) => x.c).join(', ')} are most often still open after 9 AM`}
-            sub="Share of weekday 5–7 PM court-hours first taken at 9 AM or later, by court"
+            sub="Weekday 5–7 PM courts still open at 9 AM, by court"
             source="Holidays and data-quality exclusions left out. A court counts as taken at its first walk-up booking, even if that group later cancelled."
           >
             <SimpleBars items={courts.map((x) => ({ label: `Court ${x.c}`, value: x.share, display: pct(x.share, 0) }))} />
@@ -81,14 +81,14 @@ export function Insights({ manifest, insights, timing }: { manifest: Manifest; i
 
       <Group title="Singles or doubles?">
         <div className="readouts">
-          <Readout label="Singles (2 players)" value={pct((c.singles ?? 0) / total, 0)} accent sub={`${num(c.singles ?? 0)} court-hours`} />
-          <Readout label="Doubles (4 players)" value={pct((c.doubles ?? 0) / total, 1)} sub={`${num(c.doubles ?? 0)} court-hours`} />
-          <Readout label="Only one player recorded" value={pct((c.one ?? 0) / total, 1)} sub={`${num(c.one ?? 0)} court-hours`} />
+          <Readout label="Singles (2 players)" value={pct((c.singles ?? 0) / total, 0)} accent sub={`${num(c.singles ?? 0)} games`} />
+          <Readout label="Doubles (4 players)" value={pct((c.doubles ?? 0) / total, 1)} sub={`${num(c.doubles ?? 0)} games`} />
+          <Readout label="Only one player recorded" value={pct((c.one ?? 0) / total, 1)} sub={`${num(c.one ?? 0)} games`} />
         </div>
         <div style={{ marginTop: 14, maxWidth: 560 }}>
           <Figure
             title={`Doubles cluster early: most at ${peakDoubles.join(', ')}`}
-            sub="Doubles court-hours by start time, walk-up and online courts"
+            sub="Doubles games by court time"
             source="Counted from player records: a 4th player checked in = doubles."
           >
             <SimpleBars items={byHour.map((h) => ({ label: hourLabel(h.hour), value: h.doubles, display: num(h.doubles) }))} />
@@ -98,7 +98,7 @@ export function Insights({ manifest, insights, timing }: { manifest: Manifest; i
 
       <Group title="Two-hour bookings">
         <div className="readouts">
-          <Readout label="Likely 2-hour bookings" value={num(th.likely_pairs)} accent sub={`${pct(th.likely_share_of_walkup_hours, 1)} of walk-up court-hours`} />
+          <Readout label="Likely 2-hour bookings" value={num(th.likely_pairs)} accent sub={`${pct(th.likely_share_of_walkup_hours, 1)} of walk-up hours`} />
           <Readout label="With doubles" value={pct(th.likely_with_doubles / Math.max(1, th.likely_pairs), 0)} sub={`${num(th.likely_with_doubles)} of them`} />
           <Readout label="Most common start" value={topStart ? hourLabel(Number(topStart[0])) : '—'} sub={topStart ? `${num(topStart[1])} bookings` : undefined} />
           <Readout label="Possible (looser match)" value={num(th.possible_pairs)} />
@@ -149,7 +149,7 @@ export function Insights({ manifest, insights, timing }: { manifest: Manifest; i
         </div>
       </Group>
       <div className="foot">
-        Checked-in court-hours before {manifest.snapshot.historical_outcome_cutoff}. Walk-up courts: {manifest.court_groups?.walkup.join(', ')}.
+        From past NYC Parks records. Some of these are estimates; see About the data.
       </div>
     </>
   )

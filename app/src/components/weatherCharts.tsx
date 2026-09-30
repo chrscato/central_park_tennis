@@ -108,7 +108,7 @@ export function RainTimeline({
           3 days before: {inches(w?.trail3, w?.trail3Trace)}
           {w?.source === 'iem-hourly-sum' && ' (from hourly obs)'}
           <br />
-          {d.c ? `${num(d.c['rained-out'])} of ${num(d.c.recorded)} recorded court-hours rained out` : 'No court records in this export'}
+          {d.c ? `${num(d.c['rained-out'])} of ${num(d.c.recorded)} courts rained out` : 'No court records'}
         </>
       ),
     })
@@ -119,7 +119,7 @@ export function RainTimeline({
   return (
     <div className="chart" ref={ref} onMouseLeave={() => setTip(null)}>
       {width > 0 && days.length > 0 && (
-        <svg width={width} height={height} role="img" aria-label={`Daily rainfall and recorded rained-out court-hours, ${year}`}>
+        <svg width={width} height={height} role="img" aria-label={`Daily rainfall and courts rained out, ${year}`}>
           <defs>
             <pattern id="hatch-tl" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
               <line x1="0" y1="0" x2="0" y2="4" stroke="var(--hatch)" strokeWidth="1" />
@@ -149,7 +149,7 @@ export function RainTimeline({
             </g>
             <g transform={`translate(0,${panelH + gapH})`}>
               <text x={0} y={-6} style={{ fontWeight: 700 }}>
-                Recorded rained-out court-hours
+                Courts rained out
               </text>
               {roTicks.map((v) => (
                 <g key={v}>

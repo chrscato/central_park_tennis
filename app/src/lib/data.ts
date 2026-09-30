@@ -12,23 +12,24 @@ export const STATUSES = [
 ] as const
 export type Status = (typeof STATUSES)[number]
 
+// Plain-language names for the recorded schedule statuses (raw values in comments).
 export const STATUS_LABEL: Record<Status, string> = {
-  'all-checkedin': 'All checked in',
-  'rained-out': 'Rained out',
-  assigned: 'Assigned',
-  'booking-in-progress': 'Booking in progress',
-  unassigned: 'Unassigned',
-  unbookable: 'Unbookable',
+  'all-checkedin': 'Played', // all-checkedin
+  'rained-out': 'Rained out', // rained-out
+  assigned: 'Booked, no check-in', // assigned
+  'booking-in-progress': 'Being booked', // booking-in-progress
+  unassigned: 'Not booked', // unassigned
+  unbookable: 'Blocked', // unbookable
 }
 
 // Short text codes so status never relies on color alone.
 export const STATUS_CODE: Record<Status, string> = {
-  'all-checkedin': 'CI',
-  'rained-out': 'RO',
-  assigned: 'AS',
-  'booking-in-progress': 'BP',
-  unassigned: 'UA',
-  unbookable: 'UB',
+  'all-checkedin': '✓',
+  'rained-out': 'R',
+  assigned: 'B',
+  'booking-in-progress': '…',
+  unassigned: '',
+  unbookable: '×',
 }
 
 export interface LedgerStep {

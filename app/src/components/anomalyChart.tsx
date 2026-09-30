@@ -34,7 +34,7 @@ export function RainScatter({ points }: { points: RainPoint[] }) {
   return (
     <div className="chart" ref={ref} onMouseLeave={() => setTip(null)}>
       {width > 0 && (
-        <svg width={width} height={height} role="img" aria-label="Dates by rain on the day and day before versus share of court-hours rained out">
+        <svg width={width} height={height} role="img" aria-label="Days by rain versus share of courts rained out">
           <g transform={`translate(${m.l},${m.t})`}>
             {[0, 0.25, 0.5, 0.75, 1].map((v) => (
               <g key={v}>
@@ -68,7 +68,7 @@ export function RainScatter({ points }: { points: RainPoint[] }) {
                       <>
                         <strong>{longDate(p.date)}</strong>
                         <br />
-                        {pct(p.share, 0)} of {num(p.recorded)} court-hours rained out
+                        {pct(p.share, 0)} of {num(p.recorded)} courts rained out
                         <br />
                         Rain that day + day before: {p.rain.toFixed(2)}"
                         {p.flag && (

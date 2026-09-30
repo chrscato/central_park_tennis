@@ -115,6 +115,12 @@ function isLikelyHoliday(date: string): boolean {
   return false
 }
 
+/** "5 PM & 6 PM" / "7, 8 & 9 AM" style list of court times. */
+function hoursText(hours: number[]): string {
+  const labels = hours.map(hourLabel)
+  return labels.length <= 1 ? labels.join('') : `${labels.slice(0, -1).join(', ')} & ${labels[labels.length - 1]}`
+}
+
 /** "Wednesdays in April" / "Weekdays in April, May" */
 function describe(f: PlannerFilter): string {
   const wd = f.weekdays
@@ -126,7 +132,7 @@ function describe(f: PlannerFilter): string {
         : wd.length === 2 && wd.includes(0) && wd.includes(6)
           ? 'Weekends'
           : wd.map((d) => WEEKDAYS_LONG[d] + 's').join(', ')
-  const months = f.months.length === SEASON_MONTHS.length ? 'the season' : f.months.map((m) => MONTHS_LONG[m - 1]).join(', ')
+  const months = f.months.length === SEASON_MONTHS.length ? 'the season' : f.months.map((m) => MONTHS_LONG[m - 1]).join(' & ')
   return `${days} in ${months}`
 }
 
@@ -141,6 +147,7 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
   const [open, setOpen] = useState<OpeningFilter>(wxAvailable ? initial.open : 'any')
   const [copied, setCopied] = useState(false)
   const [drawer, setDrawer] = useState(false)
+  const [editTimes, setEditTimes] = useState(false)
   const [tomorrowNote, setTomorrowNote] = useState<string | null>(null)
   const isMobile = useMediaQuery('(max-width: 900px)')
   const tomorrow = useMemo(() => tomorrowInNY(timing.holidays ?? []), [timing])
@@ -167,13 +174,11 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
     [timing, filter, manifest, cutoff, minDates, test],
   )
 
-  const walkupCourts = timing.court_groups?.walkup ?? []
   const onlineCourts = timing.court_groups?.online ?? []
   const incomplete = !filter.months.length || !filter.weekdays.length || !filter.hours.length
   const target = r.planningTarget.suppressed ? null : r.planningTarget.minute
   const alarm = target == null ? null : alarmMinute(target, personal.prep, personal.travel, personal.buffer)
   const limited = r.days.length < minDates
-  const courtText = filter.courts === 'all' ? 'all courts' : 'walk-up courts'
 
   const copyLink = async () => {
     try {
@@ -212,7 +217,7 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
             <span>All</span>
           </label>
         </div>
-        {onlineCourts.length > 0 && <div className="hint">Courts {ranges(onlineCourts)} are mostly booked online, so they’re left out by default.</div>}
+        {onlineCourts.length > 0 && <div className="hint">Walk-up leaves out courts {ranges(onlineCourts)}, which are booked online.</div>}
       </Group>
       <details>
         <summary className="small" style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--ink-2)', marginBottom: 8 }}>
@@ -309,41 +314,51 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
         {tomorrowNote && <div className="note">{tomorrowNote}</div>}
 
         {incomplete ? (
-          <div className="note">Pick at least one court time, day, and month.</div>
+          <div className="note">Pick a court time, a day and a month.</div>
         ) : r.slotCount === 0 ? (
-          <div className="note">No walk-up bookings in the records for this choice.</div>
+          <div className="note">No past days match. Try more days or months.</div>
         ) : (
           <>
-            <Group title={`${describe(filter)}, ${inList(filter.hours.map(hourLabel))} courts`}>
-              <p style={{ fontSize: 16, maxWidth: 720 }}>
-                On past days like this, half of the {courtText} were taken by <b>{clock(r.pooled.p50)}</b> and three in four by <b>{clock(r.pooled.p75)}</b>.
-                On a typical day the last one went at <b>{clock(r.latest.last.p50)}</b>.
-                {r.freed.count > 0 && (
-                  <>
-                    {' '}
-                    Some come back: {num(r.freed.count)} ({Math.round((r.freed.count / r.slotCount) * 100)}%) were freed by a cancellation or no-show and
-                    taken again, usually around <b>{clock(r.freed.retakeMedian)}</b>.
-                  </>
-                )}
-              </p>
-              <div className="readouts readouts-5">
-                <Readout label="25% taken by" value={clock(r.pooled.p25)} />
-                <Readout label="50% taken by" value={clock(r.pooled.p50)} accent />
-                <Readout label="75% taken by" value={clock(r.pooled.p75)} />
-                <Readout label="Last 5 began" value={clock(r.latest.fifthLast.p50)} sub="typical day" />
-                <Readout label="Last one taken" value={clock(r.latest.last.p50)} sub="typical day" />
+            <section className="answer" aria-label="Answer">
+              <div className="answer-title">
+                {describe(filter)} · {hoursText(filter.hours)}
               </div>
-              <div className="hint">
-                Based on {num(r.days.length)} days and {num(r.slotCount)} walk-up bookings.
-              </div>
+              {target != null && bench ? (
+                <>
+                  <div className="answer-main">
+                    Get in line by <b>{clock(target)}</b>
+                  </div>
+                  <div className="answer-sub">
+                    Set your alarm for <b>{clock(alarm)}</b>{' '}
+                    <button type="button" className="linklike" onClick={() => setEditTimes(!editTimes)}>
+                      ({personal.prep + personal.travel + personal.buffer} min to get ready and travel · change)
+                    </button>
+                  </div>
+                  {editTimes && (
+                    <div className="row" style={{ marginTop: 10 }}>
+                      <label className="small">
+                        Get ready <input type="number" min={0} max={600} value={personal.prep} onChange={setP('prep')} /> min
+                      </label>
+                      <label className="small">
+                        Travel <input type="number" min={0} max={600} value={personal.travel} onChange={setP('travel')} /> min
+                      </label>
+                      <label className="small">
+                        Extra <input type="number" min={0} max={600} value={personal.buffer} onChange={setP('buffer')} /> min
+                      </label>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="answer-main small-main">Not enough past days to give a time.</div>
+              )}
               {limited && (
-                <div className="note">
-                  Only {r.days.length} days match, so treat these as rough.{' '}
+                <div className="row" style={{ marginTop: 10 }}>
+                  <span className="small">Only {r.days.length} past days match.</span>
                   {filter.weekdays.length < 5 && (
                     <button className="btn small" type="button" onClick={() => setFilter({ ...filter, weekdays: [1, 2, 3, 4, 5] })}>
-                      Include all weekdays
+                      Use all weekdays
                     </button>
-                  )}{' '}
+                  )}
                   {filter.months.length < SEASON_MONTHS.length && (
                     <button
                       className="btn small"
@@ -359,72 +374,46 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
                   )}
                 </div>
               )}
-            </Group>
+            </section>
 
-            <Group title="Plan your morning">
-              <div className="row" style={{ alignItems: 'flex-end', gap: 24 }}>
-                <div className="readouts" style={{ marginBottom: 0 }}>
-                  <Readout
-                    label="Be in line by"
-                    value={bench ? (target == null ? 'Not enough data' : clock(target)) : 'Hidden'}
-                    off={!bench || target == null}
-                    sub={bench && target == null ? `Needs ${minDates}+ days` : 'Errs on the early side'}
-                  />
-                  <Readout label="Set your alarm for" value={alarm == null || !bench ? '—' : clock(alarm)} accent off={alarm == null || !bench} />
-                </div>
-                <div className="row">
-                  <label className="small">
-                    Get ready <input type="number" min={0} max={600} value={personal.prep} onChange={setP('prep')} /> min
-                  </label>
-                  <label className="small">
-                    Travel <input type="number" min={0} max={600} value={personal.travel} onChange={setP('travel')} /> min
-                  </label>
-                  <label className="small">
-                    Extra buffer <input type="number" min={0} max={600} value={personal.buffer} onChange={setP('buffer')} /> min
-                  </label>
-                </div>
+            <Group title="When courts go">
+              <div className="readouts readouts-5">
+                <Readout label="25% gone" value={clock(r.typical.p25)} />
+                <Readout label="Half gone" value={clock(r.typical.p50)} accent />
+                <Readout label="75% gone" value={clock(r.typical.p75)} />
+                <Readout label="Last 5 go from" value={clock(r.typical.fifthLast)} />
+                <Readout label="Last one gone" value={clock(r.typical.last)} />
               </div>
-              <div className="hint">“Be in line by” would have put you ahead of the early rush on most past days. It isn’t a guarantee.</div>
-              <label className="check small" style={{ marginTop: 6 }}>
-                <input type="checkbox" checked={personal.share} onChange={(e) => setPersonal({ ...personal, share: e.target.checked })} />
-                Include my times when I copy the link
-              </label>
+              <div className="hint">On a typical day, from {num(r.days.length)} past days like this.</div>
             </Group>
 
             <div className="cols-2" style={{ marginBottom: 26 }}>
-              <Figure title="How fast each day’s courts went" sub="Share of the day’s walk-up bookings made by each time" source="Each grey line is one day; blue is the middle day.">
+              <Figure title="How fast courts go" sub="Each grey line is one past day">
                 <CurvesChart result={r} showTarget={bench} />
               </Figure>
-              <Figure
-                title="How many courts go in each 15 minutes"
-                sub={`Courts taken per ${BIN} minutes on an average day like this`}
-                source={`Average over ${num(r.days.length)} matching days. Source: NYC Parks FOIL records.`}
-              >
+              <Figure title="Courts gone every 15 minutes" sub="On an average day">
                 <TimeHistogram bins={r.histogram} binMinutes={BIN} days={r.days.length} />
               </Figure>
             </div>
 
             <details className="grp">
               <summary className="fig-title" style={{ cursor: 'pointer' }}>
-                More numbers & every day
+                See every past day
               </summary>
-              <div className="readouts" style={{ margin: '12px 0' }}>
-                <Readout label="Typical day’s midpoint" value={clock(r.dayWeighted.p50)} sub={`${clock(r.dayWeighted.p25)}–${clock(r.dayWeighted.p75)}`} />
-                <Readout label="Last 5 began, days counted" value={num(r.latest.fifthLast.n)} sub="days with 5+ bookings" />
-                <Readout label="Last one taken, range" value={`${clock(r.latest.last.p25)}–${clock(r.latest.last.p75)}`} />
-              </div>
-              <label className="check small" style={{ marginBottom: 10 }}>
-                <input type="checkbox" checked={bench} onChange={(e) => setBench(e.target.checked)} />
-                Show “be in line by” (each day’s first-quarter time; the early quarter of those days; rounded down to 15 min)
-              </label>
-              <div className="grid-wrap">
+              {r.freed.count > 0 && (
+                <p className="small" style={{ marginTop: 10 }}>
+                  {num(r.freed.count)} courts ({Math.round((r.freed.count / r.slotCount) * 100)}%) came back after a cancellation or no-show and were taken
+                  again, usually around {clock(r.freed.retakeMedian)}.
+                </p>
+              )}
+              <div className="grid-wrap" style={{ marginTop: 8 }}>
                 <table className="dg">
                   <thead>
                     <tr>
                       <th>Day</th>
-                      <th className="n">Bookings</th>
+                      <th className="n">Courts</th>
                       <th className="n">First</th>
-                      <th className="n">Half by</th>
+                      <th className="n">Half gone</th>
                       <th className="n">Last</th>
                       <th>Last five</th>
                       <th />
@@ -442,26 +431,26 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
                         </td>
                         <td className="muted num">{d.lastFive.map((m) => clock(m)).join(' · ')}</td>
                         <td>
-                          <a href={href('courts', { date: d.date })}>Courts</a>
+                          <a href={href('courts', { date: d.date })}>View</a>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              {(r.zeroQualifyingDates.length > 0 || r.noRecordDates.length > 0 || r.weatherUnknownDates.length > 0) && (
-                <p className="hint">
-                  Not counted: {r.zeroQualifyingDates.length} days with no walk-up booking at these times, {r.noRecordDates.length} days missing from the records
-                  {test ? `, ${r.weatherExcludedDates} filtered out by weather, ${r.weatherUnknownDates.length} without weather data` : ''}.
-                </p>
-              )}
+              <label className="check small" style={{ marginTop: 10 }}>
+                <input type="checkbox" checked={bench} onChange={(e) => setBench(e.target.checked)} />
+                Show the “get in line by” time
+              </label>
+              <label className="check small">
+                <input type="checkbox" checked={personal.share} onChange={(e) => setPersonal({ ...personal, share: e.target.checked })} />
+                Include my travel times when I share
+              </label>
             </details>
           </>
         )}
         <div className="foot">
-          From NYC Parks records of walk-up bookings that went ahead ({courtText}
-          {filter.courts !== 'all' && walkupCourts.length ? `: ${ranges(walkupCourts)}` : ''}). Shows when courts were taken on past days, not your odds
-          today. <a href={href('methodology')}>How this works</a>
+          Based on past NYC Parks records, not live availability. <a href={href('methodology')}>How this works</a>
         </div>
       </section>
     </div>

@@ -5,13 +5,28 @@ import { hourLabel, longDate, num } from '../lib/format'
 import { replaceParams } from '../lib/url'
 import { dayIndex, inches, type WeatherData } from '../lib/weather'
 
+/** "Walk-up" / "Online" / "Waiting list" from the booking methods of the first player. */
+function bookedBy(methods: Record<string, number>): string {
+  const first = Object.keys(methods).filter((m) => !['second', 'third', 'fourth'].includes(m))
+  if (!first.length) return '—'
+  const names: Record<string, string> = { walkup: 'Walk-up', online: 'Online', 'waiting list': 'Waiting list', 'repeat list': 'Repeat list', reservation: 'Reservation', 'reservation-phone': 'Phone' }
+  return first.map((m) => names[m] ?? m).join(', ')
+}
+
+function players(methods: Record<string, number>): string {
+  if (methods.fourth) return 'Doubles (4)'
+  if (methods.third) return '3'
+  if (methods.second) return 'Singles (2)'
+  return '1 recorded'
+}
+
 function Counts({ obj }: { obj: Record<string, number> }) {
   const entries = Object.entries(obj)
   if (!entries.length) return <span className="muted">—</span>
   return <>{entries.map(([k, v]) => `${k} (${v})`).join(', ')}</>
 }
 
-export function Courts({ manifest, overview, weather, params }: { manifest: Manifest; overview: Overview; weather: WeatherData; params: URLSearchParams }) {
+export function Courts({ overview, weather, params }: { manifest: Manifest; overview: Overview; weather: WeatherData; params: URLSearchParams }) {
   const wxIdx = useMemo(() => (weather.status === 'available' ? dayIndex(weather) : null), [weather])
   const dates = useMemo(() => overview.daily.map((d) => d.date), [overview])
   const requested = params.get('date')
@@ -201,43 +216,34 @@ export function Courts({ manifest, overview, weather, params }: { manifest: Mani
                         </td>
                       </tr>
                       <tr>
-                        <th>Slot ID</th>
-                        <td className="num">{sel.id}</td>
+                        <th>Booked</th>
+                        <td style={{ whiteSpace: 'normal' }}>{bookedBy(sel.methods)}</td>
                       </tr>
                       <tr>
-                        <th>Export rows</th>
-                        <td>{sel.rows}</td>
+                        <th>Players</th>
+                        <td>{players(sel.methods)}</td>
                       </tr>
                       <tr>
-                        <th>Methods</th>
-                        <td style={{ whiteSpace: 'normal' }}>
-                          <Counts obj={sel.methods} />
-                        </td>
-                      </tr>
-                      <tr>
-                        <th>Player status</th>
-                        <td style={{ whiteSpace: 'normal' }}>
-                          <Counts obj={sel.player_statuses} />
-                        </td>
-                      </tr>
-                      <tr>
-                        <th>Permits</th>
-                        <td>
-                          <Counts obj={sel.permits} />
-                        </td>
-                      </tr>
-                      <tr>
-                        <th>Actions</th>
-                        <td style={{ whiteSpace: 'normal' }}>
-                          <Counts obj={sel.actions} />
-                        </td>
-                      </tr>
-                      <tr>
-                        <th>Walkup booked</th>
-                        <td>{sel.walkup ? `${sel.walkup.time} (${Math.round(sel.walkup.lead_minutes)} min before)` : '—'}</td>
+                        <th>Walk-up booked at</th>
+                        <td>{sel.walkup ? sel.walkup.time : '—'}</td>
                       </tr>
                     </tbody>
                   </table>
+                )}
+                {sel && (
+                  <details className="small" style={{ marginTop: 8 }}>
+                    <summary style={{ cursor: 'pointer' }}>Record details</summary>
+                    <table className="kv" style={{ marginTop: 4 }}>
+                      <tbody>
+                        <tr><th>Slot ID</th><td className="num">{sel.id}</td></tr>
+                        <tr><th>Rows in the records</th><td>{sel.rows}</td></tr>
+                        <tr><th>How booked</th><td style={{ whiteSpace: 'normal' }}><Counts obj={sel.methods} /></td></tr>
+                        <tr><th>Player status</th><td style={{ whiteSpace: 'normal' }}><Counts obj={sel.player_statuses} /></td></tr>
+                        <tr><th>Permits</th><td><Counts obj={sel.permits} /></td></tr>
+                        <tr><th>Cancellations etc.</th><td style={{ whiteSpace: 'normal' }}><Counts obj={sel.actions} /></td></tr>
+                      </tbody>
+                    </table>
+                  </details>
                 )}
                 <button className="btn small" type="button" style={{ marginTop: 6 }} onClick={() => setSelected(null)}>
                   Close
@@ -274,7 +280,7 @@ export function Courts({ manifest, overview, weather, params }: { manifest: Mani
                 </table>
               </Group>
             )}
-            <div className="foot">Blank = no record in export, which is not the same as a closed court. Staff notes withheld. Data {manifest.data_version}.</div>
+            <div className="foot">Blank = no record for that court and hour (not necessarily closed). Tap a square for details.</div>
           </aside>
         </div>
       )}

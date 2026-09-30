@@ -144,7 +144,7 @@ def run(config_path: Path) -> int:
 
     data_version = f"{cfg['snapshot']['label']}-{sha[:8]}"
     manifest = {
-        "app": "Central Park Tennis Watch",
+        "app": "Central Park Tennis Data",
         "pipeline_version": PIPELINE_VERSION,
         "data_version": data_version,
         "built_at_utc": built_at,

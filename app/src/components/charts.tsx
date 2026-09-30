@@ -86,20 +86,20 @@ export function CurvesChart({ result, showTarget }: { result: PlannerResult; sho
       <div className="legend">
         <span className="legend-item">
           <span className="line-key" style={{ borderColor: '#bcb6ab', borderTopWidth: 1 }} />
-          Each date ({result.days.length})
+          Past days
         </span>
         <span className="legend-item">
           <span className="line-key" style={{ borderColor: 'var(--seq-4)' }} />
-          Median date
+          Typical day
         </span>
         <span className="legend-item">
           <span className="swatch" style={{ background: 'var(--accent-soft)' }} />
-          Middle 50%
+          Most days
         </span>
         {target != null && (
           <span className="legend-item">
             <span className="line-key" style={{ borderColor: 'var(--red)' }} />
-            Benchmark
+            Get in line by
           </span>
         )}
       </div>
@@ -108,7 +108,7 @@ export function CurvesChart({ result, showTarget }: { result: PlannerResult; sho
           width={width}
           height={height}
           role="img"
-          aria-label="Daily cumulative share of qualifying successful walkup entries by clock time"
+          aria-label="How fast courts go on each past day"
           onMouseLeave={() => setHover(null)}
           onMouseMove={(e) => {
             const r = e.currentTarget.getBoundingClientRect()
@@ -164,9 +164,9 @@ export function CurvesChart({ result, showTarget }: { result: PlannerResult; sho
               <>
                 <strong>By {clock(curve.grid[hi])}</strong>
                 <br />
-                Median date: {pct(curve.median[hi], 0)} booked
+                Typical day: {pct(curve.median[hi], 0)} of courts gone
                 <br />
-                Middle 50%: {pct(curve.lo[hi], 0)}–{pct(curve.hi[hi], 0)}
+                Most days: {pct(curve.lo[hi], 0)}–{pct(curve.hi[hi], 0)}
               </>
             ),
           }}
@@ -202,7 +202,7 @@ export function TimeHistogram({ bins, binMinutes, days }: { bins: { start: numbe
   return (
     <div className="chart" ref={ref}>
       {width > 0 && (
-        <svg width={width} height={height} role="img" aria-label="Histogram of qualifying entry times">
+        <svg width={width} height={height} role="img" aria-label="Courts gone every 15 minutes on an average day">
           <g transform={`translate(${m.l},${m.t})`}>
             {ticks.map((v) => (
               <g key={v}>

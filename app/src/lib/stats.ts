@@ -63,6 +63,7 @@ export interface DaySeries {
   times: number[] // ascending minute-of-day of qualifying entries
   p25: number
   p50: number
+  p75: number
   last: number // latest qualifying booking that day
   lastFive: number[] // the day's final (up to) five booking times, ascending
 }
@@ -74,6 +75,8 @@ export interface PlannerResult {
   dayWeighted: { p25: number | null; p50: number | null; p75: number | null } // of daily medians
   /** Across days (each day once): the day's last booking, and the day's 5th-from-last booking (days with 5+ bookings). */
   latest: { last: { p25: number | null; p50: number | null; p75: number | null }; fifthLast: { p50: number | null; n: number } }
+  /** A typical day: the median across days of each day's 25/50/75% time, 5th-from-last and last booking. */
+  typical: { p25: number | null; p50: number | null; p75: number | null; fifthLast: number | null; last: number | null }
   /** Court-hours taken, freed by a cancellation/no-show, and taken again (with the re-take time). */
   freed: { count: number; retakeMedian: number | null }
   zeroQualifyingDates: string[] // recorded slots in window but no qualifying entry
@@ -162,6 +165,7 @@ export function computePlanner(t: Timing, f: PlannerFilter, opts: PlannerOptions
         times,
         p25: quantile(times, 0.25)!,
         p50: quantile(times, 0.5)!,
+        p75: quantile(times, 0.75)!,
         last: times[times.length - 1],
         lastFive: times.slice(-5),
       }
@@ -186,6 +190,14 @@ export function computePlanner(t: Timing, f: PlannerFilter, opts: PlannerOptions
   const medians = days.map((x) => x.p50).sort((a, b) => a - b)
   const lasts = days.map((x) => x.last).sort((a, b) => a - b)
   const fifths = days.filter((x) => x.times.length >= 5).map((x) => x.times[x.times.length - 5]).sort((a, b) => a - b)
+  const med = (xs: number[]) => quantile([...xs].sort((a, b) => a - b), 0.5)
+  const typical = {
+    p25: med(days.map((x) => x.p25)),
+    p50: med(days.map((x) => x.p50)),
+    p75: med(days.map((x) => x.p75)),
+    fifthLast: med(days.map((x) => x.times[Math.max(0, x.times.length - 5)])),
+    last: med(days.map((x) => x.last)),
+  }
   const latest = {
     last: { p25: quantile(lasts, 0.25), p50: quantile(lasts, 0.5), p75: quantile(lasts, 0.75) },
     fifthLast: { p50: quantile(fifths, 0.5), n: fifths.length },
@@ -210,6 +222,7 @@ export function computePlanner(t: Timing, f: PlannerFilter, opts: PlannerOptions
     days,
     dayWeighted,
     latest,
+    typical,
     freed: { count: retakes.length, retakeMedian: quantile(retakes.sort((a, b) => a - b), 0.5) },
     zeroQualifyingDates,
     noRecordDates,

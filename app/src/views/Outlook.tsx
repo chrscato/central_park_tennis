@@ -2,14 +2,22 @@ import { useMemo, useState } from 'react'
 import { Group, Readout, useAsync } from '../components/common'
 import type { Manifest, Timing } from '../lib/data'
 import { clock, hourLabel, num, pct } from '../lib/format'
-import { fetchLiveRain, NWS_OBS_URL } from '../lib/live'
+import { fetchLiveRain } from '../lib/live'
 import { combineTests, openingTest, outlook, type OutlookWindow, type TodayAssumption } from '../lib/outlook'
 import { computePlanner } from '../lib/stats'
 import { href } from '../lib/url'
-import { BUCKET_LABEL, inches, type WeatherData } from '../lib/weather'
+import { inches, type Bucket, type WeatherData } from '../lib/weather'
 
 const WEEKDAYS = [1, 2, 3, 4, 5]
 const SEASON = [4, 5, 6, 7, 8, 9, 10]
+const RAIN_WORDS: Record<Bucket, string> = {
+  dry: 'no rain',
+  trace: 'a sprinkle',
+  light: 'light rain (under 0.10")',
+  moderate: 'steady rain (0.10–0.49")',
+  heavy: 'heavy rain (0.50"+)',
+  missing: 'unknown rain',
+}
 const WINDOW_LABEL: Record<OutlookWindow, string> = { prev1: 'Yesterday', trail2: 'Last 2 days', trail3: 'Last 3 days' }
 const WINDOWS = [
   { label: '1–4 PM courts', hours: [13, 14, 15, 16], h: '13,14,15,16' },
@@ -52,7 +60,7 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
   return (
     <div className="split">
       <aside>
-        <Group title="Rain at Central Park">
+        <Group title="How much rain?">
           {live.status === 'loading' && <p className="muted small">Reading the gauge…</p>}
           {live.status === 'error' && (
             <div className="note err">
@@ -81,23 +89,15 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
           </div>
           {live.status === 'ready' && (
             <div className="hint">
-              Today so far {inches(live.data.today.partialTotal, live.data.today.trace)} · last report{' '}
-              {live.data.latestObservation
-                ? new Date(live.data.latestObservation).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })
-                : '—'}
-              {liveWin && liveWin.total == null && ` · *${liveWin.hoursPresent} of ${liveWin.hoursExpected} hourly reports; may be low`}
+              Central Park, live · today so far {inches(live.data.today.partialTotal, live.data.today.trace)}
+              {liveWin && liveWin.total == null && ' · * a few hourly readings missing'}
             </div>
           )}
           <div className="field" style={{ marginTop: 10 }}>
-            <label htmlFor="manual">Or enter (in)</label>
+            <label htmlFor="manual">Or type inches</label>
             <input id="manual" type="number" step="0.01" min={0} max={30} value={manual} placeholder={liveAmount?.toFixed(2) ?? '0.00'} onChange={(e) => setManual(e.target.value)} />
           </div>
-          <div className="hint">
-            {manualValid ? `Using your ${WINDOW_LABEL[win].toLowerCase()} figure.` : 'Live: NWS station KNYC.'}{' '}
-            <a href={`${NWS_OBS_URL}/latest`} target="_blank" rel="noreferrer">
-              Feed
-            </a>
-          </div>
+          {manualValid && <div className="hint">Using your number.</div>}
         </Group>
         <Group title="Today">
           <label className="check">
@@ -108,36 +108,34 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
             <input type="radio" name="today" checked={today === 'any'} onChange={() => setToday('any')} />
             Any weather
           </label>
-          <div className="hint">Check the forecast; this is your assumption.</div>
+
         </Group>
       </aside>
 
       <section>
         {o && (
-          <Group title={`After ${BUCKET_LABEL[o.bucket]} ${win === 'prev1' ? 'the day before' : `over the ${win === 'trail2' ? '2' : '3'} days before`}${today === 'dry' ? ', then a dry day' : ''}`}>
-            <div className="fig-sub">{num(o.dates.length)} comparable days in the records</div>
+          <Group title={`After ${RAIN_WORDS[o.bucket]} ${win === 'prev1' ? 'yesterday' : `in the last ${win === 'trail2' ? '2' : '3'} days`}${today === 'dry' ? ', if today stays dry' : ''}`}>
             {o.dates.length === 0 ? (
               <p>No comparable days.</p>
             ) : (
               <>
                 <div className="readouts" style={{ marginBottom: 8 }}>
                   <Readout
-                    label="Courts usually back by"
+                    label="Courts back by"
                     value={o.firstPlay.p50 == null ? '—' : hourLabel(Math.round(o.firstPlay.p50))}
                     accent
                     sub={`Range ${o.firstPlay.p25 == null ? '—' : hourLabel(Math.floor(o.firstPlay.p25))}–${o.firstPlay.p75 == null ? '—' : hourLabel(Math.ceil(o.firstPlay.p75))}`}
                   />
                   <Readout label="Mornings closed" value={pct(o.lateShare, 0)} sub={`${num(o.lateDates)} of ${num(o.knownOpeningDates)} days`} />
-                  <Readout label="Based on" value={num(o.dates.length)} sub={o.dates.length < 10 ? 'Few days, rough guide' : 'past days'} />
+
                 </div>
                 <div className="grid-wrap tall">
                   <table className="dg">
                     <thead>
                       <tr>
-                        <th>Start</th>
-                        <th style={{ width: '55%' }}>Share of courts closed by rain</th>
-                        <th className="n">Closed</th>
-                        <th className="n">Courts counted</th>
+                        <th>Court time</th>
+                        <th style={{ width: '60%' }}>Rained out</th>
+                        <th className="n" />
                       </tr>
                     </thead>
                     <tbody>
@@ -152,7 +150,6 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
                               </div>
                             </td>
                             <td className="n">{pct(h.share, 0)}</td>
-                            <td className="n">{num(h.recorded)}</td>
                           </tr>
                         ))}
                     </tbody>
@@ -163,16 +160,15 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
           </Group>
         )}
 
-        <Group title="When mornings are closed, afternoon and evening courts go sooner">
+        <Group title="When mornings close, later courts go faster">
           <div className="grid-wrap">
             <table className="dg">
               <thead>
                 <tr>
                   <th>Courts</th>
-                  <th className="n">Mornings closed</th>
+                  <th className="n">Rainy morning</th>
                   <th className="n">Normal day</th>
-                  <th className="n">Earlier by</th>
-                  <th className="n">Days</th>
+                  <th className="n">Faster by</th>
                   <th />
                 </tr>
               </thead>
@@ -188,11 +184,8 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
                       </td>
                       <td className="n">{clock(n)}</td>
                       <td className="n">{l != null && n != null ? `${Math.round(n - l)} min` : '—'}</td>
-                      <td className="n">
-                        {num(w.late.days.length)} / {num(w.normal.days.length)}
-                      </td>
                       <td>
-                        <a href={href('planner', { m: SEASON.join(','), dow: WEEKDAYS.join(','), h: w.h, y: 'all', open: 'late' })}>Plan</a>
+                        <a href={href('planner', { m: SEASON.join(','), dow: WEEKDAYS.join(','), h: w.h, y: 'all', open: 'late' })}>See times</a>
                       </td>
                     </tr>
                   )
@@ -200,9 +193,9 @@ export function Outlook({ manifest, timing, weather }: { manifest: Manifest; tim
               </tbody>
             </table>
           </div>
-          <div className="hint">Typical time the courts were half taken, weekdays, walk-up courts. “Mornings closed” = half or more of 7–11 AM courts rained out.</div>
+          <div className="hint">Time half the courts were gone, weekdays.</div>
         </Group>
-        <div className="foot">Based on past records, not official closure notices or a forecast.</div>
+        <div className="foot">Past records, not a forecast or official closure notice.</div>
       </section>
     </div>
   )
