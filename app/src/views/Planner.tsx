@@ -4,7 +4,7 @@ import { Figure, Group, Readout, useMediaQuery } from '../components/common'
 import type { Manifest, Timing } from '../lib/data'
 import { clock, hourLabel, inList, longDate, MONTHS, MONTHS_LONG, num, ranges, WEEKDAYS, WEEKDAYS_LONG } from '../lib/format'
 import { combineTests, OPENING_FILTER, openingTest, type OpeningFilter } from '../lib/outlook'
-import { alarmMinute, computePlanner, dateMeta, DEFAULT_FILTER, type PlannerFilter } from '../lib/stats'
+import { computePlanner, dateMeta, DEFAULT_FILTER, type PlannerFilter } from '../lib/stats'
 import { toLocal } from '../lib/live'
 import { href, parseIntList, replaceParams } from '../lib/url'
 import { PLANNER_WEATHER, plannerWeatherTest, type PlannerWeather, type WeatherData } from '../lib/weather'
@@ -14,12 +14,6 @@ const DAYS = [1, 2, 3, 4, 5, 6, 0]
 const HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
 const BIN = 15
 
-interface Personal {
-  prep: number
-  travel: number
-  buffer: number
-  share: boolean
-}
 
 function readState(params: URLSearchParams, years: number[]) {
   const invalid: string[] = []
@@ -37,18 +31,6 @@ function readState(params: URLSearchParams, years: number[]) {
     courts: params.get('c') === 'all' ? 'all' : 'walkup',
     holidays: params.get('hol') === '1',
   }
-  const n = (key: string, fallback: number) => {
-    const raw = params.get(key)
-    if (raw == null) return fallback
-    const v = Number(raw)
-    if (!Number.isFinite(v) || v < 0 || v > 600) {
-      invalid.push(key)
-      return fallback
-    }
-    return Math.round(v)
-  }
-  const personal: Personal = { prep: n('prep', 20), travel: n('travel', 30), buffer: n('buf', 0), share: params.get('share') === '1' }
-  const bench = params.get('bench') !== '0'
   const enumParam = <T extends string>(key: string, allowed: Record<string, string>, label: string): T | 'any' => {
     const raw = params.get(key)
     if (raw == null) return 'any'
@@ -58,10 +40,10 @@ function readState(params: URLSearchParams, years: number[]) {
   }
   const wx = enumParam<PlannerWeather>('wx', PLANNER_WEATHER, 'weather') as PlannerWeather
   const open = enumParam<OpeningFilter>('open', OPENING_FILTER, 'opening') as OpeningFilter
-  return { filter, personal, bench, wx, open, invalid }
+  return { filter, wx, open, invalid }
 }
 
-function toParams(f: PlannerFilter, bench: boolean, p: Personal, wx: PlannerWeather, open: OpeningFilter): URLSearchParams {
+function toParams(f: PlannerFilter, wx: PlannerWeather, open: OpeningFilter): URLSearchParams {
   const q = new URLSearchParams()
   q.set('m', f.months.join(','))
   q.set('dow', f.weekdays.join(','))
@@ -71,13 +53,6 @@ function toParams(f: PlannerFilter, bench: boolean, p: Personal, wx: PlannerWeat
   if (f.holidays) q.set('hol', '1')
   if (wx !== 'any') q.set('wx', wx)
   if (open !== 'any') q.set('open', open)
-  if (!bench) q.set('bench', '0')
-  if (p.share) {
-    q.set('share', '1')
-    q.set('prep', String(p.prep))
-    q.set('travel', String(p.travel))
-    q.set('buf', String(p.buffer))
-  }
   return q
 }
 
@@ -141,13 +116,10 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
   const initial = useMemo(() => readState(params, years), []) // eslint-disable-line react-hooks/exhaustive-deps
   const wxAvailable = weather.status === 'available'
   const [filter, setFilter] = useState(initial.filter)
-  const [bench, setBench] = useState(initial.bench)
-  const [personal, setPersonal] = useState(initial.personal)
   const [wx, setWx] = useState<PlannerWeather>(wxAvailable ? initial.wx : 'any')
   const [open, setOpen] = useState<OpeningFilter>(wxAvailable ? initial.open : 'any')
   const [copied, setCopied] = useState(false)
   const [drawer, setDrawer] = useState(false)
-  const [editTimes, setEditTimes] = useState(false)
   const [tomorrowNote, setTomorrowNote] = useState<string | null>(null)
   const isMobile = useMediaQuery('(max-width: 900px)')
   const tomorrow = useMemo(() => tomorrowInNY(timing.holidays ?? []), [timing])
@@ -164,7 +136,7 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
   }
   const tomorrowLabel = `Tomorrow · ${WEEKDAYS[tomorrow.dow]} ${Number(tomorrow.date.slice(5, 7))}/${Number(tomorrow.date.slice(8, 10))}`
 
-  useEffect(() => replaceParams('planner', toParams(filter, bench, personal, wx, open)), [filter, bench, personal, wx, open])
+  useEffect(() => replaceParams('planner', toParams(filter, wx, open)), [filter, wx, open])
 
   const minDates = manifest.cohort.min_dates_for_planning_target
   const cutoff = manifest.snapshot.historical_outcome_cutoff
@@ -176,8 +148,6 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
 
   const onlineCourts = timing.court_groups?.online ?? []
   const incomplete = !filter.months.length || !filter.weekdays.length || !filter.hours.length
-  const target = r.planningTarget.suppressed ? null : r.planningTarget.minute
-  const alarm = target == null ? null : alarmMinute(target, personal.prep, personal.travel, personal.buffer)
   const limited = r.days.length < minDates
 
   const copyLink = async () => {
@@ -189,7 +159,6 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
       setCopied(false)
     }
   }
-  const setP = (k: keyof Personal) => (e: React.ChangeEvent<HTMLInputElement>) => setPersonal({ ...personal, [k]: Math.max(0, Number(e.target.value) || 0) })
 
   const summaryText = incomplete
     ? 'Choose court time, day and month'
@@ -319,38 +288,15 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
           <div className="note">No past days match. Try more days or months.</div>
         ) : (
           <>
-            <section className="answer" aria-label="Answer">
-              <div className="answer-title">
-                {describe(filter)} · {hoursText(filter.hours)}
+            <Group title={`${describe(filter)} · ${hoursText(filter.hours)}`}>
+              <div className="readouts readouts-5">
+                <Readout label="25% gone" value={clock(r.typical.p25)} />
+                <Readout label="Half gone" value={clock(r.typical.p50)} accent />
+                <Readout label="75% gone" value={clock(r.typical.p75)} />
+                <Readout label="Last 5 go from" value={clock(r.typical.fifthLast)} />
+                <Readout label="Last one gone" value={clock(r.typical.last)} />
               </div>
-              {target != null && bench ? (
-                <>
-                  <div className="answer-main">
-                    Get in line by <b>{clock(target)}</b>
-                  </div>
-                  <div className="answer-sub">
-                    Set your alarm for <b>{clock(alarm)}</b>{' '}
-                    <button type="button" className="linklike" onClick={() => setEditTimes(!editTimes)}>
-                      ({personal.prep + personal.travel + personal.buffer} min to get ready and travel · change)
-                    </button>
-                  </div>
-                  {editTimes && (
-                    <div className="row" style={{ marginTop: 10 }}>
-                      <label className="small">
-                        Get ready <input type="number" min={0} max={600} value={personal.prep} onChange={setP('prep')} /> min
-                      </label>
-                      <label className="small">
-                        Travel <input type="number" min={0} max={600} value={personal.travel} onChange={setP('travel')} /> min
-                      </label>
-                      <label className="small">
-                        Extra <input type="number" min={0} max={600} value={personal.buffer} onChange={setP('buffer')} /> min
-                      </label>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="answer-main small-main">Not enough past days to give a time.</div>
-              )}
+              <div className="hint">When courts were gone on a typical day, from {num(r.days.length)} past days like this.</div>
               {limited && (
                 <div className="row" style={{ marginTop: 10 }}>
                   <span className="small">Only {r.days.length} past days match.</span>
@@ -374,22 +320,11 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
                   )}
                 </div>
               )}
-            </section>
-
-            <Group title="When courts go">
-              <div className="readouts readouts-5">
-                <Readout label="25% gone" value={clock(r.typical.p25)} />
-                <Readout label="Half gone" value={clock(r.typical.p50)} accent />
-                <Readout label="75% gone" value={clock(r.typical.p75)} />
-                <Readout label="Last 5 go from" value={clock(r.typical.fifthLast)} />
-                <Readout label="Last one gone" value={clock(r.typical.last)} />
-              </div>
-              <div className="hint">On a typical day, from {num(r.days.length)} past days like this.</div>
             </Group>
 
             <div className="cols-2" style={{ marginBottom: 26 }}>
               <Figure title="How fast courts go" sub="Each grey line is one past day">
-                <CurvesChart result={r} showTarget={bench} />
+                <CurvesChart result={r} showTarget={false} />
               </Figure>
               <Figure title="Courts gone every 15 minutes" sub="On an average day">
                 <TimeHistogram bins={r.histogram} binMinutes={BIN} days={r.days.length} />
@@ -438,14 +373,6 @@ export function Planner({ manifest, timing, weather, params }: { manifest: Manif
                   </tbody>
                 </table>
               </div>
-              <label className="check small" style={{ marginTop: 10 }}>
-                <input type="checkbox" checked={bench} onChange={(e) => setBench(e.target.checked)} />
-                Show the “get in line by” time
-              </label>
-              <label className="check small">
-                <input type="checkbox" checked={personal.share} onChange={(e) => setPersonal({ ...personal, share: e.target.checked })} />
-                Include my travel times when I share
-              </label>
             </details>
           </>
         )}

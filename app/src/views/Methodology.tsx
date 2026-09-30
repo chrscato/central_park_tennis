@@ -77,7 +77,7 @@ export function Methodology({ manifest: m }: { manifest: Manifest }) {
           </div>
           <div className="hint">
             Per checked-in court-hour: earliest walkup booking made that day, before start. Excludes 2nd–4th players, online, phone,
-            waitlist. Percentiles: linear interpolation. Benchmark suppressed under {m.cohort.min_dates_for_planning_target} dates.
+            waitlist. Percentiles: linear interpolation. Under {m.cohort.min_dates_for_planning_target} matching days is flagged as a small sample.
           </div>
         </Group>
         <Group title="Checks against earlier analysis">
